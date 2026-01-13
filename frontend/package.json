@@ -27,7 +27,7 @@
     "@tanstack/react-query": "^5.52.0",
     "react-hook-form": "^7.54.1",
     "@hookform/resolvers": "^3.4.0",
-    "zod": "^3.23.8",
+    "zod": "^4.3.5",
     "openapi-fetch": "^0.11.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-avatar": "^1.1.0",
