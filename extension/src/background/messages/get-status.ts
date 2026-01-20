@@ -15,6 +15,9 @@ const handler: PlasmoMessaging.MessageHandler<{}, GetStatusResponse> = async (re
     // 安全处理 logs 数组
     const logs = Array.isArray(state.logs) ? state.logs : [];
 
+    // 安全处理 fetchedData 数组
+    const fetchedData = Array.isArray(state.fetchedData) ? state.fetchedData : [];
+
     res.send({
       status: state.status || 'idle',
       progress: state.progress || 0,
@@ -28,7 +31,8 @@ const handler: PlasmoMessaging.MessageHandler<{}, GetStatusResponse> = async (re
         timestamp: log.timestamp,
         level: log.level,
         message: log.message
-      }))
+      })),
+      fetchedData
     });
   } catch (error) {
     console.error('[Message] get-status 执行失败:', error);

@@ -7,15 +7,27 @@
 import { CONFIG_KEYS } from '~types/storage';
 
 /**
+ * 生成日期字符串（YYYY-MM-DD）
+ */
+export function formatDateKey(timestamp: number): string {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * 生成已下架记录的唯一键
- * 格式：mallId:goodsSkuId:unPublishedTime
+ * 格式：mallId:skcId:date（同一店铺同一SKC同一天只推送一次）
  */
 export function generateUnpublishedKey(
   mallId: string,
-  goodsSkuId: string,
+  skcId: string,
   unPublishedTime: number
 ): string {
-  return `${mallId}:${goodsSkuId}:${unPublishedTime}`;
+  const date = formatDateKey(unPublishedTime);
+  return `${mallId}:${skcId}:${date}`;
 }
 
 /**
@@ -44,13 +56,14 @@ class DedupManager {
 
   /**
    * 判断下架记录是否为新记录（未推送过）
+   * 使用 mallId + skcId + date 去重
    */
   async isNewUnpublished(
     mallId: string,
-    goodsSkuId: string,
+    skcId: string,
     unPublishedTime: number
   ): Promise<boolean> {
-    const key = generateUnpublishedKey(mallId, goodsSkuId, unPublishedTime);
+    const key = generateUnpublishedKey(mallId, skcId, unPublishedTime);
     const pushedKeys = await this.getPushedKeys();
     return !pushedKeys.has(key);
   }
@@ -70,7 +83,7 @@ class DedupManager {
    */
   async filterNewRecords(records: Array<{
     mallId: string;
-    goodsSkuId: string;
+    skcId: string;
     unPublishedTime: number;
   }>): Promise<string[]> {
     const pushedKeys = await this.getPushedKeys();
@@ -79,7 +92,7 @@ class DedupManager {
     for (const record of records) {
       const key = generateUnpublishedKey(
         record.mallId,
-        record.goodsSkuId,
+        record.skcId,
         record.unPublishedTime
       );
       if (!pushedKeys.has(key)) {
@@ -91,20 +104,22 @@ class DedupManager {
   }
 
   /**
-   * 清理过期的已推送记录（保留最近 30 天）
+   * 清理过期的已推送记录（保留最近 N 天）
    */
   async cleanupOldRecords(daysToKeep: number = 30): Promise<number> {
     const pushedKeys = await this.getPushedKeys();
-    const cutoffTime = Date.now() - daysToKeep * 24 * 60 * 60 * 1000;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    const cutoffDateStr = formatDateKey(cutoffDate.getTime());
     let deletedCount = 0;
 
     const keysToKeep = new Set<string>();
     for (const key of pushedKeys) {
-      // 解析时间戳（格式：mallId:goodsSkuId:timestamp）
+      // 解析日期（格式：mallId:skcId:YYYY-MM-DD）
       const parts = key.split(':');
       if (parts.length >= 3) {
-        const timestamp = parseInt(parts[2]);
-        if (timestamp >= cutoffTime) {
+        const dateStr = parts[2];
+        if (dateStr >= cutoffDateStr) {
           keysToKeep.add(key);
         } else {
           deletedCount++;

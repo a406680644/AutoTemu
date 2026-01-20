@@ -4,12 +4,14 @@
  * 核心功能：
  * - 扩展生命周期管理
  * - 定时任务调度（chrome.alarms）
- * - 消息路由
  * - 保活机制（waitUntil）
+ *
+ * 注意：消息处理由 Plasmo Messaging 自动管理（background/messages/*.ts）
  */
 
 import db from "~lib/storage/idb";
 import { runUnpublishedMonitor } from "./tasks/unpublished-monitor";
+import { closeCreatedTab } from "~lib/api/bridge-handler";
 
 console.log('[SW] Service Worker 加载成功');
 
@@ -21,10 +23,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('[SW] 扩展已安装/更新:', details.reason);
 
   if (details.reason === 'install') {
-    // 首次安装：初始化数据和定时任务
     await handleFirstInstall();
   } else if (details.reason === 'update') {
-    // 更新：迁移数据（如需要）
     await handleUpdate(details.previousVersion);
   }
 });
@@ -42,8 +42,8 @@ async function handleFirstInstall() {
 
     // 初始化配置
     await chrome.storage.local.set({
-      enabled: false,  // 默认不启用自动同步
-      sync_interval: 30,  // 默认 30 分钟
+      enabled: false,
+      sync_interval: 30,
       task_state: {
         status: 'idle',
         progress: 0,
@@ -57,8 +57,7 @@ async function handleFirstInstall() {
     });
     console.log('[SW] 配置初始化成功');
 
-    // 创建定时任务（默认不启用）
-    // 用户在 Options 页面启用后才会生效
+    // 创建定时任务
     await createAlarms();
     console.log('[SW] 定时任务创建成功');
 
@@ -72,7 +71,6 @@ async function handleFirstInstall() {
  */
 async function handleUpdate(previousVersion?: string) {
   console.log('[SW] 从版本', previousVersion, '更新');
-  // 预留：未来版本迁移逻辑
 }
 
 // ============================================
@@ -81,7 +79,6 @@ async function handleUpdate(previousVersion?: string) {
 
 chrome.runtime.onStartup.addListener(() => {
   console.log('[SW] 浏览器启动，扩展激活');
-  // 预留：启动时检查和初始化
 });
 
 // ============================================
@@ -92,19 +89,16 @@ chrome.runtime.onStartup.addListener(() => {
  * 创建定时任务
  */
 async function createAlarms() {
-  // 获取用户配置
   const config = await chrome.storage.local.get(['sync_interval', 'enabled']);
-  const interval = config.sync_interval || 30;  // 默认 30 分钟
+  const interval = config.sync_interval || 30;
   const enabled = config.enabled || false;
 
   if (enabled) {
-    // 下架监控任务（周期性）
     await chrome.alarms.create('unpublished-monitor', {
       periodInMinutes: interval
     });
     console.log('[SW] 已创建定时任务: unpublished-monitor, 间隔:', interval, '分钟');
   } else {
-    // 清除定时任务
     await chrome.alarms.clear('unpublished-monitor');
     console.log('[SW] 已清除定时任务（未启用）');
   }
@@ -125,14 +119,15 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   try {
     switch (alarm.name) {
       case 'unpublished-monitor':
-        // 下架监控任务
         console.log('[SW] 执行下架监控任务');
-        await waitUntil(runUnpublishedMonitor());
+        await waitUntil(
+          runUnpublishedMonitor()
+            .finally(() => closeCreatedTab())
+        );
         console.log('[SW] 下架监控任务完成');
         break;
 
       case 'cleanup-cache':
-        // 清理过期缓存
         const deleted = await db.clearExpiredCache();
         console.log('[SW] 清理过期缓存完成，删除', deleted, '条');
         break;
@@ -146,137 +141,6 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 // ============================================
-// 消息路由
-// ============================================
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[SW] 收到消息:', message.type, 'from:', sender.tab?.id || 'extension');
-
-  // 使用 async IIFE 处理异步消息
-  (async () => {
-    try {
-      switch (message.type) {
-        case 'ping':
-          // Ping 测试
-          sendResponse({ ok: true, message: 'Service Worker 运行中' });
-          break;
-
-        case 'BRIDGE_REQUEST':
-          // 跨域请求代理
-          const result = await handleBridgeRequest(message);
-          sendResponse(result);
-          break;
-
-        case 'UPDATE_ALARMS':
-          // 更新定时任务
-          await createAlarms();
-          sendResponse({ success: true });
-          break;
-
-        default:
-          sendResponse({ success: false, error: '未知的消息类型: ' + message.type });
-      }
-    } catch (error) {
-      console.error('[SW] 处理消息失败:', error);
-      sendResponse({
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  })();
-
-  // 返回 true 保持消息通道开放（异步响应）
-  return true;
-});
-
-// ============================================
-// 跨域请求代理（Content Script Bridge）
-// ============================================
-
-/**
- * 处理跨域请求
- * 通过 Content Script Bridge 在 Temu 域发送请求
- */
-async function handleBridgeRequest(message: {
-  targetHost: string;
-  requestData: any;
-}): Promise<{ success: boolean; data?: any; error?: string }> {
-  const { targetHost, requestData } = message;
-
-  try {
-    // 1. 查找目标域的标签页
-    const tabs = await chrome.tabs.query({});
-    const targetTab = tabs.find(tab => {
-      try {
-        const url = new URL(tab.url || '');
-        return url.hostname.includes(targetHost);
-      } catch {
-        return false;
-      }
-    });
-
-    if (!targetTab || !targetTab.id) {
-      return {
-        success: false,
-        error: `未找到 ${targetHost} 的标签页，请先登录 Temu 卖家中心`
-      };
-    }
-
-    // 2. Ping 检测 Content Script 是否就绪（带重试）
-    let pingSuccess = false;
-    for (let i = 0; i < 10; i++) {
-      try {
-        const ping = await chrome.tabs.sendMessage(targetTab.id, { type: 'ping' });
-        if (ping?.ok) {
-          console.log('[SW] Bridge Ping 成功:', ping.host);
-          pingSuccess = true;
-          break;
-        }
-      } catch {
-        console.log('[SW] Bridge Ping 失败，重试中...', i + 1);
-        await new Promise(r => setTimeout(r, 500));
-      }
-    }
-
-    if (!pingSuccess) {
-      // 尝试重新注入 Content Script
-      console.log('[SW] 尝试重新注入 Content Script');
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: targetTab.id },
-          files: ['contents/temu-bridge.js']
-        });
-        await new Promise(r => setTimeout(r, 1000));
-      } catch (injectError) {
-        console.error('[SW] 注入 Content Script 失败:', injectError);
-      }
-    }
-
-    // 3. 发送实际请求
-    const response = await chrome.tabs.sendMessage(targetTab.id, requestData);
-
-    if (!response?.ok) {
-      return {
-        success: false,
-        error: response?.error || '请求失败'
-      };
-    }
-
-    return {
-      success: true,
-      data: response
-    };
-
-  } catch (error) {
-    console.error('[SW] Bridge 请求失败:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-
-// ============================================
 // 保活机制（waitUntil 模式）
 // ============================================
 
@@ -287,7 +151,7 @@ async function handleBridgeRequest(message: {
 async function waitUntil(promise: Promise<any>): Promise<any> {
   const keepAlive = setInterval(() => {
     chrome.runtime.getPlatformInfo();
-  }, 25 * 1000);  // 每 25 秒 Ping 一次
+  }, 25 * 1000);
 
   try {
     return await promise;
@@ -300,7 +164,6 @@ async function waitUntil(promise: Promise<any>): Promise<any> {
 // 错误处理
 // ============================================
 
-// 全局错误处理
 self.addEventListener('error', (event) => {
   console.error('[SW] 全局错误:', event.error);
 });
@@ -313,7 +176,6 @@ self.addEventListener('unhandledrejection', (event) => {
 // 初始化
 // ============================================
 
-// Service Worker 启动时初始化数据库
 (async () => {
   try {
     await db.init();

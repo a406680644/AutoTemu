@@ -9,21 +9,29 @@
 // ============================================
 
 /**
- * 已下架商品记录
+ * 按原因分组的 SKC 列表
+ */
+export interface ReasonGroup {
+  reason: string;      // 下架原因
+  skcIds: string[];    // 该原因下的所有 SKC ID
+}
+
+/**
+ * 已下架商品记录（方案B：每个店铺每天一条记录）
+ *
+ * 主键：mallId + unPublishedDate
+ * 同一店铺同一天只存储一条，相同原因的 SKC 归纳在一起
  */
 export interface UnpublishedItem {
   // 唯一键字段
-  mallId: string;           // 店铺 ID
-  goodsSkuId: string;       // SKU ID
-  unPublishedTime: number;  // 下架时间戳
+  mallId: string;             // 店铺 ID
+  unPublishedDate: string;    // 下架日期 "YYYY-MM-DD"
 
   // 数据字段
-  skcId: string;            // SKC ID
-  goodsName: string;        // 商品名称
-  goodsMainImage: string;   // 商品主图
-  unPublishedReason: string; // 下架原因
-  createdAt: number;        // 记录创建时间
-  pushed: boolean;          // 是否已推送钉钉
+  mallName: string;           // 店铺名称
+  reasonGroups: ReasonGroup[]; // 按原因分组的 SKC 列表
+  totalCount: number;         // SKC 总数
+  pushed: boolean;            // 是否已推送钉钉
 }
 
 /**
@@ -107,6 +115,14 @@ export interface TaskState {
   endTime?: number;          // 结束时间戳
   error?: string;            // 错误信息
   logs: TaskLog[];           // 日志数组
+  shouldStop?: boolean;      // 停止标志
+  fetchedData?: Array<{              // 拉取的数据（用于展示）
+    mallId: string;
+    mallName: string;
+    skcId: string;
+    unPublishedTime: number;
+    unPublishedReason: string;
+  }>;
 }
 
 // ============================================

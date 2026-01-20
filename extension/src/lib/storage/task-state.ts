@@ -45,8 +45,59 @@ class TaskStateManager {
       progress: 0,
       totalMalls: 0,
       completedMalls: 0,
-      logs: []
+      logs: [],
+      shouldStop: false,
+      fetchedData: []
     };
+  }
+
+  // ============================================
+  // 停止控制
+  // ============================================
+
+  /**
+   * 请求停止任务
+   */
+  async requestStop(): Promise<void> {
+    await this.set({ shouldStop: true });
+    await this.addLog('warn', '收到停止请求，正在中止任务...');
+  }
+
+  /**
+   * 清除停止标志
+   */
+  async clearStopFlag(): Promise<void> {
+    await this.set({ shouldStop: false });
+  }
+
+  /**
+   * 检查是否需要停止
+   */
+  async shouldStop(): Promise<boolean> {
+    const state = await this.get();
+    return state.shouldStop === true;
+  }
+
+  // ============================================
+  // 数据展示
+  // ============================================
+
+  /**
+   * 添加拉取的数据（用于展示）
+   */
+  async addFetchedData(items: any[]): Promise<void> {
+    const state = await this.get();
+    const currentData = state.fetchedData || [];
+    // 限制最多保存 500 条用于展示
+    const newData = [...currentData, ...items].slice(-500);
+    await this.set({ fetchedData: newData });
+  }
+
+  /**
+   * 清空拉取的数据
+   */
+  async clearFetchedData(): Promise<void> {
+    await this.set({ fetchedData: [] });
   }
 
   // ============================================

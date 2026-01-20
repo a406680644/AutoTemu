@@ -16,7 +16,7 @@ import type {
 } from '~types/storage';
 
 const DB_NAME = 'autotemu-db';
-const DB_VERSION = 1;
+const DB_VERSION = 3;  // V3: 每个店铺每天只存储一条记录
 
 /**
  * IndexedDB 数据库管理器
@@ -25,13 +25,31 @@ class DatabaseManager {
   private db: IDBDatabase | null = null;
 
   /**
+   * 检查数据库连接是否有效
+   */
+  private isConnectionValid(): boolean {
+    if (!this.db) return false;
+    try {
+      // 尝试访问 objectStoreNames 来验证连接有效性
+      this.db.objectStoreNames;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * 初始化数据库
-   * 如果已初始化则直接返回
+   * 如果连接无效则重新打开
    */
   async init(): Promise<IDBDatabase> {
-    if (this.db) {
-      return this.db;
+    // 检查现有连接是否有效
+    if (this.isConnectionValid()) {
+      return this.db!;
     }
+
+    // 清理无效连接
+    this.db = null;
 
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -43,6 +61,13 @@ class DatabaseManager {
 
       request.onsuccess = () => {
         this.db = request.result;
+
+        // 监听连接关闭事件
+        this.db.onclose = () => {
+          console.log('[IDB] 数据库连接已关闭');
+          this.db = null;
+        };
+
         console.log('[IDB] 数据库初始化成功');
         resolve(this.db);
       };
@@ -60,20 +85,25 @@ class DatabaseManager {
    * 仅在数据库升级时调用
    */
   private createStores(db: IDBDatabase): void {
-    // 1. 已下架记录表
-    if (!db.objectStoreNames.contains('unpublished')) {
-      const unpublishedStore = db.createObjectStore('unpublished', {
-        // 复合主键：[mallId, goodsSkuId, unPublishedTime]
-        keyPath: ['mallId', 'goodsSkuId', 'unPublishedTime']
-      });
-      // 索引：按店铺查询
-      unpublishedStore.createIndex('mallId', 'mallId', { unique: false });
-      // 索引：按下架时间查询
-      unpublishedStore.createIndex('unPublishedTime', 'unPublishedTime', { unique: false });
-      // 索引：查询未推送的记录
-      unpublishedStore.createIndex('pushed', 'pushed', { unique: false });
-      console.log('[IDB] 创建表: unpublished');
+    // 1. 已下架记录表（V3: 每个店铺每天一条记录）
+    // 如果存在旧表，先删除
+    if (db.objectStoreNames.contains('unpublished')) {
+      db.deleteObjectStore('unpublished');
+      console.log('[IDB] 删除旧表: unpublished');
     }
+    // 创建新表
+    const unpublishedStore = db.createObjectStore('unpublished', {
+      // 复合主键：[mallId, unPublishedDate]
+      // 同一店铺同一天只存储一条记录
+      keyPath: ['mallId', 'unPublishedDate']
+    });
+    // 索引：按店铺查询
+    unpublishedStore.createIndex('mallId', 'mallId', { unique: false });
+    // 索引：按日期查询
+    unpublishedStore.createIndex('unPublishedDate', 'unPublishedDate', { unique: false });
+    // 索引：查询未推送的记录
+    unpublishedStore.createIndex('pushed', 'pushed', { unique: false });
+    console.log('[IDB] 创建表: unpublished (V3)');
 
     // 2. 站点异常表
     if (!db.objectStoreNames.contains('site_errors')) {

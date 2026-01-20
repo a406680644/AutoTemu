@@ -194,6 +194,44 @@ const styles = {
     color: 'white',
     marginBottom: 24
   },
+  stopButton: {
+    width: '100%',
+    padding: '16px',
+    fontSize: 20,
+    fontWeight: 700,
+    border: 'none',
+    borderRadius: 8,
+    cursor: 'pointer',
+    backgroundColor: '#dc2626',
+    color: 'white',
+    marginBottom: 24
+  },
+  dataTable: {
+    width: '100%',
+    borderCollapse: 'collapse' as const,
+    fontSize: 13
+  },
+  tableHeader: {
+    backgroundColor: '#f3f4f6',
+    padding: '10px 8px',
+    textAlign: 'left' as const,
+    borderBottom: '2px solid #e5e7eb',
+    fontWeight: 600
+  },
+  tableCell: {
+    padding: '8px',
+    borderBottom: '1px solid #e5e7eb',
+    maxWidth: 200,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const
+  },
+  dataContainer: {
+    maxHeight: 400,
+    overflowY: 'auto' as const,
+    border: '1px solid #e5e7eb',
+    borderRadius: 6
+  },
   helpCard: {
     backgroundColor: '#eff6ff',
     border: '1px solid #bfdbfe',
@@ -241,17 +279,20 @@ export default function RunnerPage() {
   const [completedMalls, setCompletedMalls] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
   const [error, setError] = useState<string>();
+  const [fetchedData, setFetchedData] = useState<any[]>([]);
 
   // 轮询任务状态
   useEffect(() => {
+    // 页面加载时立即获取一次状态
+    updateStatus();
+
     const interval = setInterval(async () => {
-      if (status === 'running') {
-        await updateStatus();
-      }
+      // 运行中时持续轮询，其他状态也定期检查
+      await updateStatus();
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [status]);
+  }, []);
 
   // 更新任务状态
   async function updateStatus() {
@@ -281,8 +322,28 @@ export default function RunnerPage() {
         return `[${time}] [${log.level?.toUpperCase() || 'INFO'}] ${log.message || ''}`;
       });
       setLogs(logMessages);
+
+      // 更新拉取的数据
+      const dataArray = Array.isArray(response.fetchedData) ? response.fetchedData : [];
+      setFetchedData(dataArray);
     } catch (error) {
       console.error('更新状态失败:', error);
+    }
+  }
+
+  // 停止任务
+  async function handleStopTask() {
+    try {
+      const response = await sendToBackground({
+        name: 'stop-task',
+        body: {}
+      });
+
+      if (!response?.success) {
+        setError(response?.error || '停止任务失败');
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -291,6 +352,11 @@ export default function RunnerPage() {
     try {
       setError(undefined);
       setLogs([]);
+      setFetchedData([]);  // 清空之前的数据
+      setStatus('running');  // 立即设置为运行中
+      setProgress(0);
+      setCompletedMalls(0);
+      setTotalMalls(0);
 
       const response = await sendToBackground({
         name: 'run-task',
@@ -302,14 +368,16 @@ export default function RunnerPage() {
 
       if (!response?.success) {
         setError(response?.error || '任务启动失败');
+        setStatus('idle');  // 失败时恢复为 idle
         return;
       }
 
-      // 开始轮询状态
-      setStatus('running');
+      // 任务启动成功，等待一小段时间让后台开始执行
+      await new Promise(resolve => setTimeout(resolve, 500));
       await updateStatus();
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
+      setStatus('idle');
     }
   }
 
@@ -410,6 +478,20 @@ export default function RunnerPage() {
           {currentStatus === 'running' ? '任务运行中...' : '运行任务'}
         </button>
 
+        {/* 停止按钮（仅在运行中显示） */}
+        {currentStatus === 'running' && (
+          <button
+            id="rpa-stop-button"
+            data-testid="stop-task"
+            onClick={handleStopTask}
+            style={styles.stopButton}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+          >
+            停止任务
+          </button>
+        )}
+
         {/* 进度条 */}
         {currentStatus === 'running' && (
           <div style={styles.card}>
@@ -459,6 +541,44 @@ export default function RunnerPage() {
           </div>
         </div>
 
+        {/* 数据展示（拉取到的数据预览） */}
+        {fetchedData.length > 0 && (
+          <div style={styles.card}>
+            <h2 style={styles.cardTitle}>拉取数据预览 (共 {fetchedData.length} 条)</h2>
+            <div style={styles.dataContainer}>
+              <table style={styles.dataTable}>
+                <thead>
+                  <tr>
+                    <th style={styles.tableHeader}>店铺</th>
+                    <th style={styles.tableHeader}>SKC ID</th>
+                    <th style={styles.tableHeader}>商品名称</th>
+                    <th style={styles.tableHeader}>下架原因</th>
+                    <th style={styles.tableHeader}>下架时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fetchedData.slice(0, 100).map((item, index) => (
+                    <tr key={index}>
+                      <td style={styles.tableCell}>{item.mallName || '-'}</td>
+                      <td style={styles.tableCell}>{item.skcId || '-'}</td>
+                      <td style={styles.tableCell} title={item.goodsName}>{item.goodsName || '-'}</td>
+                      <td style={styles.tableCell} title={item.unPublishedReason}>{item.unPublishedReason || '-'}</td>
+                      <td style={styles.tableCell}>
+                        {item.unPublishedTime ? new Date(item.unPublishedTime).toLocaleString() : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {fetchedData.length > 100 && (
+              <div style={{ marginTop: 8, fontSize: 13, color: '#6b7280' }}>
+                仅显示前 100 条，共 {fetchedData.length} 条数据
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 下载按钮（仅站点异常任务完成后显示） */}
         {currentStatus === 'done' && taskType === 'site-error' && (
           <button
@@ -479,6 +599,9 @@ export default function RunnerPage() {
           <ul style={styles.helpList}>
             <li style={styles.helpItem}>
               • 可通过 <code style={styles.code}>#rpa-run-button</code> 定位运行按钮
+            </li>
+            <li style={styles.helpItem}>
+              • 可通过 <code style={styles.code}>#rpa-stop-button</code> 定位停止按钮（运行中显示）
             </li>
             <li style={styles.helpItem}>
               • 可通过 <code style={styles.code}>[data-status]</code> 属性监控任务状态

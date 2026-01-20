@@ -48,6 +48,7 @@ export interface GetStatusResponse {
     level: string;
     message: string;
   }>;
+  fetchedData?: any[];  // 拉取的数据（用于展示）
 }
 
 /**

@@ -21,6 +21,7 @@ export interface Mall {
  * 用户信息响应
  */
 export interface UserInfoResponse {
+  success?: boolean;
   result?: {
     mallList?: Mall[];
   };
@@ -32,6 +33,7 @@ export interface UserInfoResponse {
  * 已下架商品数据
  */
 export interface UnpublishedDataResponse {
+  success?: boolean;
   result?: {
     total?: number;
     dataList?: Array<{
@@ -53,6 +55,7 @@ export interface UnpublishedDataResponse {
  * 已发布站点数据
  */
 export interface PublishedDataResponse {
+  success?: boolean;
   result?: {
     total?: number;
     dataList?: Array<{
@@ -82,6 +85,7 @@ export interface SiteErrorQueryRequest {
  * 站点异常响应
  */
 export interface SiteErrorResponse {
+  success?: boolean;
   result?: {
     fullyBindSiteFailVO?: Array<{
       goodsSkuId: number;
