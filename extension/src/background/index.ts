@@ -11,7 +11,9 @@
 
 import db from "~lib/storage/idb";
 import { runUnpublishedMonitor } from "./tasks/unpublished-monitor";
+import { runScheduledPush } from "./tasks/scheduled-push";
 import { closeCreatedTab } from "~lib/api/bridge-handler";
+import { config } from "~lib/storage/config";
 
 console.log('[SW] Service Worker 加载成功');
 
@@ -82,6 +84,34 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // ============================================
+// 消息处理
+// ============================================
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === 'UPDATE_ALARMS') {
+    console.log('[SW] 收到 UPDATE_ALARMS 消息，更新定时任务');
+    createAlarms()
+      .then(() => sendResponse({ success: true }))
+      .catch((error) => {
+        console.error('[SW] 更新定时任务失败:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true; // 表示异步响应
+  }
+
+  if (message.type === 'UPDATE_PUSH_ALARM') {
+    console.log('[SW] 收到 UPDATE_PUSH_ALARM 消息，更新定时推送任务');
+    createPushAlarm()
+      .then(() => sendResponse({ success: true }))
+      .catch((error) => {
+        console.error('[SW] 更新定时推送任务失败:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true; // 表示异步响应
+  }
+});
+
+// ============================================
 // 定时任务管理
 // ============================================
 
@@ -89,9 +119,9 @@ chrome.runtime.onStartup.addListener(() => {
  * 创建定时任务
  */
 async function createAlarms() {
-  const config = await chrome.storage.local.get(['sync_interval', 'enabled']);
-  const interval = config.sync_interval || 30;
-  const enabled = config.enabled || false;
+  const storageData = await chrome.storage.local.get(['sync_interval', 'enabled']);
+  const interval = storageData.sync_interval || 30;
+  const enabled = storageData.enabled || false;
 
   if (enabled) {
     await chrome.alarms.create('unpublished-monitor', {
@@ -108,6 +138,58 @@ async function createAlarms() {
     periodInMinutes: 60
   });
   console.log('[SW] 已创建定时任务: cleanup-cache');
+
+  // 创建定时推送任务
+  await createPushAlarm();
+}
+
+/**
+ * 创建定时推送任务
+ *
+ * 根据配置的推送时间创建 alarm
+ * 每天在指定时间触发一次
+ */
+async function createPushAlarm() {
+  const pushEnabled = await config.getPushEnabled();
+  const pushTime = await config.getPushTime();
+
+  if (!pushEnabled) {
+    await chrome.alarms.clear('scheduled-push');
+    console.log('[SW] 定时推送未启用，已清除 alarm');
+    return;
+  }
+
+  // 解析时间 "HH:MM"
+  const [hours, minutes] = pushTime.split(':').map(Number);
+  if (isNaN(hours) || isNaN(minutes)) {
+    console.error('[SW] 推送时间格式错误:', pushTime);
+    return;
+  }
+
+  // 计算下次触发时间
+  const now = new Date();
+  const target = new Date();
+  target.setHours(hours, minutes, 0, 0);
+
+  // 如果今天的时间已过，设置为明天
+  if (target <= now) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  const delayInMinutes = (target.getTime() - now.getTime()) / (1000 * 60);
+
+  // 创建 alarm（每 24 小时重复）
+  await chrome.alarms.create('scheduled-push', {
+    delayInMinutes,
+    periodInMinutes: 24 * 60  // 每天重复
+  });
+
+  console.log(
+    '[SW] 已创建定时推送任务: scheduled-push',
+    '\n    推送时间:', pushTime,
+    '\n    下次触发:', target.toLocaleString(),
+    '\n    延迟分钟:', Math.round(delayInMinutes)
+  );
 }
 
 /**
@@ -130,6 +212,24 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       case 'cleanup-cache':
         const deleted = await db.clearExpiredCache();
         console.log('[SW] 清理过期缓存完成，删除', deleted, '条');
+        break;
+
+      case 'scheduled-push':
+        console.log('[SW] 执行定时推送任务');
+        await waitUntil(
+          (async () => {
+            const pushResult = await runScheduledPush();
+            if (pushResult.success) {
+              console.log(
+                '[SW] 定时推送完成',
+                '\n    店铺数:', pushResult.mallCount,
+                '\n    SKC 数:', pushResult.pushedCount
+              );
+            } else {
+              console.error('[SW] 定时推送失败:', pushResult.errors);
+            }
+          })()
+        );
         break;
 
       default:

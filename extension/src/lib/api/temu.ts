@@ -167,7 +167,7 @@ class TemuApiClient {
         )];
         const unPublishedReason = reasons.length > 0 ? reasons.join('、') : '运营手动下架';
 
-        return item.skcList.map(skc => ({
+        return (item.skcList || []).map(skc => ({
           skcId: String(skc.skcId),
           unPublishedTime: Number(item.unPublishedTime) || Date.now(),
           unPublishedReason
@@ -198,7 +198,7 @@ class TemuApiClient {
     dataList: Array<{
       goodsId: number;
       goodsName: string;
-      skuList: Array<{
+      skuList?: Array<{
         goodsSkuId: number;
         skcId: string;
       }>;

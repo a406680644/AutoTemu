@@ -20,6 +20,7 @@ export type TaskType = 'unpublished' | 'site-error';
 export interface RunTaskRequest {
   taskType: TaskType;       // 任务类型
   mallIds?: string[];       // 指定店铺 ID 列表（空表示所有店铺）
+  skipPush?: boolean;       // 是否跳过推送（用于 RPA 凌晨采集场景）
 }
 
 /**

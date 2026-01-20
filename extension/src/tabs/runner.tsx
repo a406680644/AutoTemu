@@ -362,7 +362,8 @@ export default function RunnerPage() {
         name: 'run-task',
         body: {
           taskType,
-          mallIds: undefined  // 所有店铺
+          mallIds: undefined,  // 所有店铺
+          skipPush: true  // 仅采集，推送由定时任务负责
         }
       });
 
@@ -454,6 +455,9 @@ export default function RunnerPage() {
               />
               <span>站点异常导出</span>
             </label>
+          </div>
+          <div style={{ marginTop: 12, fontSize: 13, color: '#6b7280' }}>
+            下架监控仅采集数据，推送由定时任务统一处理
           </div>
         </div>
 

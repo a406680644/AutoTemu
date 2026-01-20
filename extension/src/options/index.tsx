@@ -1,15 +1,18 @@
 /**
  * AutoTemu 配置页面
  *
- * 用户可以在这里配置：
+ * 提供以下配置：
+ * - 推送渠道选择（钉钉/飞书/两者/禁用）
  * - 钉钉 Webhook URL
- * - 同步间隔
- * - 启用/禁用自动同步
+ * - 飞书应用凭证（App ID、App Secret、群聊 ID）
+ * - 同步间隔设置
+ * - 自动同步开关
  */
 
 import { useEffect, useState } from 'react';
 import { config } from '~lib/storage/config';
-import type { UserConfig } from '~types/storage';
+import { notifier } from '~lib/api/notifier';
+import type { NotifyChannel, UserConfig } from '~types/storage';
 
 // 样式常量
 const styles = {
@@ -20,10 +23,11 @@ const styles = {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
   },
   container: {
-    maxWidth: 640,
+    maxWidth: 700,
     margin: '0 auto'
   },
   header: {
+    textAlign: 'center' as const,
     marginBottom: 32
   },
   title: {
@@ -34,171 +38,186 @@ const styles = {
   },
   subtitle: {
     marginTop: 8,
-    fontSize: 14,
+    fontSize: 15,
     color: '#6b7280'
   },
   card: {
     backgroundColor: 'white',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
     borderRadius: 8,
-    padding: 24
+    padding: 24,
+    marginBottom: 24
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 600,
+    color: '#1f2937',
+    marginTop: 0,
+    marginBottom: 16,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8
   },
   formGroup: {
-    marginBottom: 24
+    marginBottom: 20
   },
   label: {
     display: 'block',
     fontSize: 14,
     fontWeight: 500,
     color: '#374151',
-    marginBottom: 8
+    marginBottom: 6
+  },
+  labelHint: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: 400
   },
   input: {
     width: '100%',
     padding: '10px 12px',
+    fontSize: 14,
     border: '1px solid #d1d5db',
     borderRadius: 6,
-    fontSize: 14,
     boxSizing: 'border-box' as const,
-    outline: 'none'
+    outline: 'none',
+    transition: 'border-color 0.2s'
+  },
+  inputFocus: {
+    borderColor: '#3b82f6'
   },
   select: {
     width: '100%',
     padding: '10px 12px',
+    fontSize: 14,
     border: '1px solid #d1d5db',
     borderRadius: 6,
-    fontSize: 14,
     backgroundColor: 'white',
     cursor: 'pointer'
   },
-  hint: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#6b7280'
+  radioGroup: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: 16
   },
-  link: {
-    color: '#2563eb',
-    textDecoration: 'none',
-    marginLeft: 4
-  },
-  switchRow: {
+  radioLabel: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#f9fafb',
-    borderRadius: 6
-  },
-  switchLabel: {
+    gap: 8,
+    cursor: 'pointer',
     fontSize: 14,
-    fontWeight: 500,
-    color: '#374151'
+    padding: '8px 16px',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: '#d1d5db',
+    borderRadius: 6,
+    transition: 'all 0.2s'
   },
-  switchHint: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#6b7280'
+  radioLabelActive: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#eff6ff'
   },
-  switch: {
-    position: 'relative' as const,
-    width: 48,
-    height: 24,
+  radio: {
+    width: 16,
+    height: 16
+  },
+  checkbox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
     cursor: 'pointer'
   },
-  switchTrack: (checked: boolean) => ({
-    width: 48,
-    height: 24,
-    backgroundColor: checked ? '#2563eb' : '#d1d5db',
-    borderRadius: 12,
-    transition: 'background-color 0.2s'
-  }),
-  switchThumb: (checked: boolean) => ({
-    position: 'absolute' as const,
-    top: 2,
-    left: checked ? 26 : 2,
+  checkboxInput: {
     width: 20,
-    height: 20,
-    backgroundColor: 'white',
-    borderRadius: '50%',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-    transition: 'left 0.2s'
-  }),
-  buttonRow: {
+    height: 20
+  },
+  buttonGroup: {
     display: 'flex',
-    alignItems: 'center',
-    gap: 16,
+    gap: 12,
     marginTop: 24
   },
-  button: {
-    padding: '10px 24px',
-    backgroundColor: '#2563eb',
-    color: 'white',
-    fontWeight: 500,
-    fontSize: 14,
+  saveButton: {
+    flex: 1,
+    padding: '12px 24px',
+    fontSize: 16,
+    fontWeight: 600,
     border: 'none',
     borderRadius: 6,
-    cursor: 'pointer'
+    cursor: 'pointer',
+    backgroundColor: '#2563eb',
+    color: 'white',
+    transition: 'background-color 0.2s'
   },
-  successText: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    fontSize: 14,
-    color: '#16a34a'
+  testButton: {
+    padding: '12px 24px',
+    fontSize: 16,
+    fontWeight: 600,
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    cursor: 'pointer',
+    backgroundColor: 'white',
+    color: '#374151',
+    transition: 'all 0.2s'
   },
-  helpCard: {
-    marginTop: 32,
-    backgroundColor: '#eff6ff',
-    border: '1px solid #bfdbfe',
-    borderRadius: 8,
-    padding: 24
+  successMessage: {
+    backgroundColor: '#dcfce7',
+    border: '1px solid #86efac',
+    color: '#166534',
+    padding: '12px 16px',
+    borderRadius: 6,
+    marginBottom: 16,
+    fontSize: 14
   },
-  helpTitle: {
-    fontSize: 18,
+  errorMessage: {
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    color: '#991b1b',
+    padding: '12px 16px',
+    borderRadius: 6,
+    marginBottom: 16,
+    fontSize: 14
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    margin: '20px 0'
+  },
+  statusBadge: (configured: boolean) => ({
+    display: 'inline-block',
+    padding: '2px 8px',
+    borderRadius: 4,
+    fontSize: 12,
     fontWeight: 500,
-    color: '#1e40af',
-    marginTop: 0,
-    marginBottom: 16
-  },
-  helpList: {
-    listStyle: 'none',
-    padding: 0,
-    margin: 0
-  },
-  helpItem: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: 12,
-    fontSize: 14,
-    color: '#1e40af'
-  },
-  checkIcon: {
-    width: 20,
-    height: 20,
-    flexShrink: 0,
-    marginTop: 2
-  },
-  loading: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f9fafb',
-    color: '#6b7280',
-    fontSize: 16
-  }
+    backgroundColor: configured ? '#dcfce7' : '#fef3c7',
+    color: configured ? '#166534' : '#92400e'
+  })
 };
 
-export default function OptionsPage() {
-  const [formData, setFormData] = useState<UserConfig>({
-    dingtalk_webhook: '',
-    sync_interval: 30,
-    enabled: false
-  });
+const channelOptions: Array<{ value: NotifyChannel; label: string; desc: string }> = [
+  { value: 'dingtalk', label: '仅钉钉', desc: '只推送到钉钉群' },
+  { value: 'feishu', label: '仅飞书', desc: '只推送到飞书群' },
+  { value: 'both', label: '两者都推', desc: '同时推送到钉钉和飞书' },
+  { value: 'none', label: '禁用推送', desc: '不推送任何通知' }
+];
 
-  const [saved, setSaved] = useState(false);
+export default function OptionsPage() {
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // 配置状态
+  const [notifyChannel, setNotifyChannel] = useState<NotifyChannel>('dingtalk');
+  const [dingtalkWebhook, setDingtalkWebhook] = useState('');
+  const [feishuAppId, setFeishuAppId] = useState('');
+  const [feishuAppSecret, setFeishuAppSecret] = useState('');
+  const [feishuChatId, setFeishuChatId] = useState('');
+  const [syncInterval, setSyncInterval] = useState(30);
+  const [enabled, setEnabled] = useState(false);
+
+  // 定时推送配置状态
+  const [pushTime, setPushTime] = useState('09:00');
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   // 加载配置
   useEffect(() => {
@@ -208,41 +227,103 @@ export default function OptionsPage() {
   async function loadConfig() {
     try {
       const userConfig = await config.getUserConfig();
-      setFormData(userConfig);
+      setNotifyChannel(userConfig.notify_channel || 'dingtalk');
+      setDingtalkWebhook(userConfig.dingtalk_webhook || '');
+      setFeishuAppId(userConfig.feishu_app_id || '');
+      setFeishuAppSecret(userConfig.feishu_app_secret || '');
+      setFeishuChatId(userConfig.feishu_chat_id || '');
+      setSyncInterval(userConfig.sync_interval || 30);
+      setEnabled(userConfig.enabled || false);
+      setPushTime(userConfig.push_time || '09:00');
+      setPushEnabled(userConfig.push_enabled || false);
     } catch (error) {
       console.error('加载配置失败:', error);
+      setMessage({ type: 'error', text: '加载配置失败' });
     } finally {
       setLoading(false);
     }
   }
 
   // 保存配置
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    setSaved(false);
+  async function handleSave() {
+    setSaving(true);
+    setMessage(null);
 
     try {
-      await config.setUserConfig(formData);
-      setSaved(true);
+      const userConfig: UserConfig = {
+        notify_channel: notifyChannel,
+        dingtalk_webhook: dingtalkWebhook,
+        feishu_app_id: feishuAppId,
+        feishu_app_secret: feishuAppSecret,
+        feishu_chat_id: feishuChatId,
+        sync_interval: syncInterval,
+        enabled,
+        push_time: pushTime,
+        push_enabled: pushEnabled
+      };
 
-      // 3 秒后隐藏提示
-      setTimeout(() => setSaved(false), 3000);
+      await config.setUserConfig(userConfig);
+      setMessage({ type: 'success', text: '配置已保存' });
+
+      // 3 秒后清除消息
+      setTimeout(() => setMessage(null), 3000);
     } catch (error) {
-      console.error('保存配置失败:', error);
-      alert('保存失败：' + (error as Error).message);
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : '保存失败'
+      });
+    } finally {
+      setSaving(false);
     }
   }
 
-  // 表单输入处理
-  function handleInputChange(field: keyof UserConfig, value: any) {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  // 测试推送
+  async function handleTest() {
+    setTesting(true);
+    setMessage(null);
+
+    try {
+      // 先保存配置
+      await handleSave();
+
+      // 测试推送
+      const result = await notifier.testNotification();
+
+      const messages: string[] = [];
+      if (result.dingtalk) {
+        messages.push(`钉钉: ${result.dingtalk.success ? '✓ 成功' : '✗ ' + result.dingtalk.message}`);
+      }
+      if (result.feishu) {
+        messages.push(`飞书: ${result.feishu.success ? '✓ 成功' : '✗ ' + result.feishu.message}`);
+      }
+
+      const allSuccess = (result.dingtalk?.success ?? true) && (result.feishu?.success ?? true);
+      setMessage({
+        type: allSuccess ? 'success' : 'error',
+        text: messages.join(' | ') || '推送渠道已禁用'
+      });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : '测试失败'
+      });
+    } finally {
+      setTesting(false);
+    }
   }
 
+  // 检查配置状态
+  const dingtalkConfigured = !!dingtalkWebhook;
+  const feishuConfigured = !!(feishuAppId && feishuAppSecret && feishuChatId);
+
   if (loading) {
-    return <div style={styles.loading}>加载中...</div>;
+    return (
+      <div style={styles.page}>
+        <div style={styles.container}>
+          <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -251,136 +332,218 @@ export default function OptionsPage() {
         {/* 页面标题 */}
         <div style={styles.header}>
           <h1 style={styles.title}>AutoTemu 配置</h1>
-          <p style={styles.subtitle}>配置自动化任务和钉钉通知</p>
+          <p style={styles.subtitle}>设置推送渠道和同步选项</p>
         </div>
 
-        {/* 配置表单 */}
-        <form onSubmit={handleSave} style={styles.card}>
-          {/* 钉钉 Webhook */}
+        {/* 消息提示 */}
+        {message && (
+          <div style={message.type === 'success' ? styles.successMessage : styles.errorMessage}>
+            {message.text}
+          </div>
+        )}
+
+        {/* 推送渠道选择 */}
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>
+            推送渠道
+          </h2>
+          <div style={styles.radioGroup}>
+            {channelOptions.map(option => (
+              <label
+                key={option.value}
+                style={{
+                  ...styles.radioLabel,
+                  ...(notifyChannel === option.value ? styles.radioLabelActive : {})
+                }}
+              >
+                <input
+                  type="radio"
+                  name="notifyChannel"
+                  value={option.value}
+                  checked={notifyChannel === option.value}
+                  onChange={(e) => setNotifyChannel(e.target.value as NotifyChannel)}
+                  style={styles.radio}
+                />
+                <div>
+                  <div style={{ fontWeight: 500 }}>{option.label}</div>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>{option.desc}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* 钉钉配置 */}
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>
+            钉钉配置
+            <span style={styles.statusBadge(dingtalkConfigured)}>
+              {dingtalkConfigured ? '已配置' : '未配置'}
+            </span>
+          </h2>
           <div style={styles.formGroup}>
-            <label htmlFor="webhook" style={styles.label}>
-              钉钉 Webhook URL
+            <label style={styles.label}>
+              Webhook URL
+              <span style={styles.labelHint}> （在钉钉群机器人设置中获取）</span>
             </label>
             <input
-              id="webhook"
-              type="url"
+              type="text"
+              value={dingtalkWebhook}
+              onChange={(e) => setDingtalkWebhook(e.target.value)}
               placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
-              value={formData.dingtalk_webhook || ''}
-              onChange={(e) => handleInputChange('dingtalk_webhook', e.target.value)}
               style={styles.input}
             />
-            <p style={styles.hint}>
-              用于接收已下架商品通知。
-              <a
-                href="https://open.dingtalk.com/document/robots/custom-robot-access"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={styles.link}
-              >
-                如何获取 Webhook？
-              </a>
-            </p>
           </div>
+        </div>
 
-          {/* 同步间隔 */}
+        {/* 飞书配置 */}
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>
+            飞书配置
+            <span style={styles.statusBadge(feishuConfigured)}>
+              {feishuConfigured ? '已配置' : '未配置'}
+            </span>
+          </h2>
           <div style={styles.formGroup}>
-            <label htmlFor="interval" style={styles.label}>
-              同步间隔（分钟）
+            <label style={styles.label}>
+              App ID
+              <span style={styles.labelHint}> （飞书开放平台应用凭证）</span>
             </label>
+            <input
+              type="text"
+              value={feishuAppId}
+              onChange={(e) => setFeishuAppId(e.target.value)}
+              placeholder="cli_xxxxxxxxxx"
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              App Secret
+              <span style={styles.labelHint}> （请妥善保管，不要泄露）</span>
+            </label>
+            <input
+              type="password"
+              value={feishuAppSecret}
+              onChange={(e) => setFeishuAppSecret(e.target.value)}
+              placeholder="••••••••••••••••"
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              群聊 ID (chat_id)
+              <span style={styles.labelHint}> （目标推送群的 ID）</span>
+            </label>
+            <input
+              type="text"
+              value={feishuChatId}
+              onChange={(e) => setFeishuChatId(e.target.value)}
+              placeholder="oc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              style={styles.input}
+            />
+          </div>
+        </div>
+
+        {/* 同步设置 */}
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>同步设置</h2>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>同步间隔</label>
             <select
-              id="interval"
-              value={formData.sync_interval}
-              onChange={(e) => handleInputChange('sync_interval', parseInt(e.target.value))}
+              value={syncInterval}
+              onChange={(e) => setSyncInterval(Number(e.target.value))}
               style={styles.select}
             >
-              <option value={30}>30 分钟</option>
-              <option value={60}>60 分钟（1 小时）</option>
-              <option value={120}>120 分钟（2 小时）</option>
-              <option value={180}>180 分钟（3 小时）</option>
-              <option value={360}>360 分钟（6 小时）</option>
-              <option value={720}>720 分钟（12 小时）</option>
+              <option value={15}>每 15 分钟</option>
+              <option value={30}>每 30 分钟</option>
+              <option value={60}>每 1 小时</option>
+              <option value={120}>每 2 小时</option>
+              <option value={360}>每 6 小时</option>
             </select>
-            <p style={styles.hint}>自动检查已下架商品的时间间隔</p>
           </div>
-
-          {/* 启用开关 */}
-          <div style={styles.formGroup}>
-            <div style={styles.switchRow}>
-              <div>
-                <div style={styles.switchLabel}>启用自动同步</div>
-                <div style={styles.switchHint}>开启后将按设定的间隔自动检查已下架商品</div>
-              </div>
-              <div
-                style={styles.switch}
-                onClick={() => handleInputChange('enabled', !formData.enabled)}
-              >
-                <div style={styles.switchTrack(formData.enabled)} />
-                <div style={styles.switchThumb(formData.enabled)} />
+          <div style={styles.divider} />
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              style={styles.checkboxInput}
+            />
+            <div>
+              <div style={{ fontWeight: 500 }}>启用自动同步</div>
+              <div style={{ fontSize: 13, color: '#6b7280' }}>
+                开启后将按设定间隔自动执行下架监控任务
               </div>
             </div>
+          </label>
+        </div>
+
+        {/* 定时推送设置 */}
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>
+            定时推送
+            <span style={styles.statusBadge(pushEnabled)}>
+              {pushEnabled ? '已启用' : '未启用'}
+            </span>
+          </h2>
+          <div style={{ marginBottom: 16, fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+            用于"采集与推送分离"场景：RPA 凌晨采集数据时不推送，等待指定时间统一推送汇总消息。
           </div>
-
-          {/* 保存按钮 */}
-          <div style={styles.buttonRow}>
-            <button
-              type="submit"
-              style={styles.button}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1d4ed8'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-            >
-              保存配置
-            </button>
-
-            {saved && (
-              <span style={styles.successText}>
-                <svg style={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                配置已保存
-              </span>
-            )}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              推送时间
+              <span style={styles.labelHint}> （每天在此时间推送汇总消息）</span>
+            </label>
+            <input
+              type="time"
+              value={pushTime}
+              onChange={(e) => setPushTime(e.target.value)}
+              style={{ ...styles.input, width: 150 }}
+            />
           </div>
-        </form>
+          <div style={styles.divider} />
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              checked={pushEnabled}
+              onChange={(e) => setPushEnabled(e.target.checked)}
+              style={styles.checkboxInput}
+            />
+            <div>
+              <div style={{ fontWeight: 500 }}>启用定时推送</div>
+              <div style={{ fontSize: 13, color: '#6b7280' }}>
+                开启后将在指定时间自动推送当日采集的数据
+              </div>
+            </div>
+          </label>
+          <div style={{ marginTop: 16, padding: 12, backgroundColor: '#fef3c7', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+            <strong>注意：</strong>定时推送需要浏览器保持运行状态。如果浏览器完全退出，alarm 不会触发。
+          </div>
+        </div>
 
-        {/* 帮助信息 */}
-        <div style={styles.helpCard}>
-          <h3 style={styles.helpTitle}>使用说明</h3>
-          <ul style={styles.helpList}>
-            <li style={styles.helpItem}>
-              <svg style={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span>配置钉钉 Webhook 后，扩展会自动将新下架的商品推送到钉钉群</span>
-            </li>
-            <li style={styles.helpItem}>
-              <svg style={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span>启用自动同步后，扩展会在后台定时检查，无需手动操作</span>
-            </li>
-            <li style={styles.helpItem}>
-              <svg style={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span>如需手动执行任务，可使用扩展的 Runner 页面进行操作</span>
-            </li>
-          </ul>
+        {/* 操作按钮 */}
+        <div style={styles.buttonGroup}>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              ...styles.saveButton,
+              opacity: saving ? 0.7 : 1
+            }}
+          >
+            {saving ? '保存中...' : '保存配置'}
+          </button>
+          <button
+            onClick={handleTest}
+            disabled={testing || notifyChannel === 'none'}
+            style={{
+              ...styles.testButton,
+              opacity: testing || notifyChannel === 'none' ? 0.5 : 1
+            }}
+          >
+            {testing ? '测试中...' : '测试推送'}
+          </button>
         </div>
       </div>
     </div>

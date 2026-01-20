@@ -38,10 +38,13 @@ export interface UnpublishedDataResponse {
     total?: number;
     dataList?: Array<{
       goodsSkuId: string;
-      skcId: string;
       goodsName: string;
       goodsMainImage: string;
       unPublishedTime: number;
+      skcList: Array<{
+        skcId: number;
+        approveStatus?: number;
+      }>;
       punishInfoList?: Array<{
         reason?: string;
       }>;

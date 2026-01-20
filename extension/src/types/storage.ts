@@ -75,10 +75,30 @@ export interface ApiCache {
 // ============================================
 
 /**
+ * 推送渠道类型
+ */
+export type NotifyChannel = 'dingtalk' | 'feishu' | 'both' | 'none';
+
+/**
  * 用户配置
  */
 export interface UserConfig {
+  // 钉钉配置
   dingtalk_webhook?: string;  // 钉钉 Webhook URL
+
+  // 飞书配置
+  feishu_app_id?: string;     // 飞书 App ID
+  feishu_app_secret?: string; // 飞书 App Secret
+  feishu_chat_id?: string;    // 飞书群聊 ID
+
+  // 推送渠道选择
+  notify_channel?: NotifyChannel;  // 推送渠道，默认 'dingtalk'
+
+  // 定时推送配置
+  push_time?: string;         // 定时推送时间，格式 "HH:MM"，如 "09:00"
+  push_enabled?: boolean;     // 是否启用定时推送
+
+  // 其他配置
   sync_interval?: number;     // 同步间隔（分钟）
   enabled?: boolean;          // 是否启用自动同步
 }
@@ -141,7 +161,22 @@ export interface PushedRecords {
 // ============================================
 
 export const CONFIG_KEYS = {
+  // 钉钉配置
   DINGTALK_WEBHOOK: 'dingtalk_webhook',
+
+  // 飞书配置
+  FEISHU_APP_ID: 'feishu_app_id',
+  FEISHU_APP_SECRET: 'feishu_app_secret',
+  FEISHU_CHAT_ID: 'feishu_chat_id',
+
+  // 推送渠道
+  NOTIFY_CHANNEL: 'notify_channel',
+
+  // 定时推送
+  PUSH_TIME: 'push_time',
+  PUSH_ENABLED: 'push_enabled',
+
+  // 其他配置
   SYNC_INTERVAL: 'sync_interval',
   ENABLED: 'enabled',
   TASK_STATE: 'task_state',

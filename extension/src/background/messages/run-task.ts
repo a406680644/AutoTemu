@@ -20,9 +20,9 @@ import { ensureBridgeReady, closeCreatedTab } from "~lib/api/bridge-handler";
 const TEMU_HOST = 'agentseller.temu.com';
 
 const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> = async (req, res) => {
-  const { taskType, mallIds } = req.body;
+  const { taskType, mallIds, skipPush } = req.body;
 
-  console.log('[run-task] 收到请求:', taskType, mallIds);
+  console.log('[run-task] 收到请求:', taskType, mallIds, 'skipPush:', skipPush);
 
   try {
     // 1. 验证任务类型
@@ -52,10 +52,10 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
     // 4. 根据任务类型执行不同的任务
     switch (taskType) {
       case 'unpublished':
-        console.log('[run-task] 启动下架监控任务');
+        console.log('[run-task] 启动下架监控任务', skipPush ? '(仅采集)' : '(采集+推送)');
 
         // 异步执行任务（不阻塞响应）
-        runUnpublishedMonitor(mallIds)
+        runUnpublishedMonitor({ mallIds, skipPush })
           .catch(async (error) => {
             console.error('[run-task] 下架监控任务失败:', error);
             await taskState.fail(error instanceof Error ? error.message : String(error));
