@@ -16,7 +16,7 @@ import type {
 } from '~types/storage';
 
 const DB_NAME = 'autotemu-db';
-const DB_VERSION = 3;  // V3: 每个店铺每天只存储一条记录
+const DB_VERSION = 4;  // V4: site_errors 表主键改为 [mallId, skcId]，支持去重更新
 
 /**
  * IndexedDB 数据库管理器
@@ -105,18 +105,20 @@ class DatabaseManager {
     unpublishedStore.createIndex('pushed', 'pushed', { unique: false });
     console.log('[IDB] 创建表: unpublished (V3)');
 
-    // 2. 站点异常表
-    if (!db.objectStoreNames.contains('site_errors')) {
-      const siteErrorsStore = db.createObjectStore('site_errors', {
-        // 复合主键：[mallId, skcId, checkedAt]
-        keyPath: ['mallId', 'skcId', 'checkedAt']
-      });
-      // 索引：按店铺查询
-      siteErrorsStore.createIndex('mallId', 'mallId', { unique: false });
-      // 索引：按检查时间查询
-      siteErrorsStore.createIndex('checkedAt', 'checkedAt', { unique: false });
-      console.log('[IDB] 创建表: site_errors');
+    // 2. 站点异常表（V4: 主键改为 [mallId, skcId]，支持去重更新）
+    if (db.objectStoreNames.contains('site_errors')) {
+      db.deleteObjectStore('site_errors');
+      console.log('[IDB] 删除旧表: site_errors');
     }
+    const siteErrorsStore = db.createObjectStore('site_errors', {
+      // 复合主键：[mallId, skcId]（同一店铺同一 SKC 只保留一条，更新时覆盖）
+      keyPath: ['mallId', 'skcId']
+    });
+    // 索引：按店铺查询
+    siteErrorsStore.createIndex('mallId', 'mallId', { unique: false });
+    // 索引：按检查时间查询
+    siteErrorsStore.createIndex('checkedAt', 'checkedAt', { unique: false });
+    console.log('[IDB] 创建表: site_errors (V4)');
 
     // 3. SKU 映射表（goodsSkuId -> skcId）
     if (!db.objectStoreNames.contains('sku_mapping')) {

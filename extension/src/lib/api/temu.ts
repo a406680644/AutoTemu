@@ -19,9 +19,10 @@ import type {
 // Temu 卖家中心域名
 const TEMU_HOST = 'agentseller.temu.com';
 
-// 基础请求头
+// 基础请求头（必须包含 Accept，否则某些 API 返回 405）
 const BASE_HEADERS = {
-  'Content-Type': 'application/json'
+  'Content-Type': 'application/json',
+  'Accept': 'application/json'
 };
 
 /**
@@ -186,12 +187,18 @@ class TemuApiClient {
    * 拉取已发布站点数据
    *
    * ⭐ 必须携带 mallId 参数，每个店铺独立请求
+   * ⭐ 根据 managedType 选择不同接口：
+   *    - managedType === 0 (全托): searchForChainSupplier
+   *    - managedType === 1 (半托): searchForSemiSupplier
+   *    通过 secondarySelectStatusList: [12] 筛选已上架状态的商品
    *
    * @param mallId 店铺 ID（必需）
+   * @param managedType 店铺类型（0=全托, 1=半托）
    * @param pageNum 页码（从 1 开始）
    */
   async fetchPublishedData(
     mallId: string,
+    managedType: number,
     pageNum: number = 1
   ): Promise<{
     total: number;
@@ -205,18 +212,31 @@ class TemuApiClient {
     }>;
   }> {
     try {
-      console.log('[Temu API] 拉取已发布站点数据 - 店铺:', mallId, '页码:', pageNum);
+      // 根据 managedType 选择接口
+      const apiUrl = managedType === 0
+        ? 'https://agentseller.temu.com/api/kiana/mms/robin/searchForChainSupplier'   // 全托
+        : 'https://agentseller.temu.com/api/kiana/mms/robin/searchForSemiSupplier';   // 半托
+
+      console.log('[Temu API] 拉取已发布站点数据 - 店铺:', mallId, '类型:', managedType === 0 ? '全托' : '半托', '页码:', pageNum);
+
+      // 使用 Kiana 接口
+      // secondarySelectStatusList: [12] 表示已上架状态
+      const requestPayload = {
+        pageNum,
+        pageSize: 100,
+        secondarySelectStatusList: [12],
+        supplierTodoTypeList: []
+      };
+
+      console.log('[Temu API] 请求载荷:', JSON.stringify(requestPayload));
 
       const response = await bridgeRequestWithRetry(
         TEMU_HOST,
         'bridge-fetch',
         {
-          url: 'https://agentseller.temu.com/api/bg/goods/spu/querySpuList',
+          url: apiUrl,
           method: 'POST',
-          data: {
-            pageNum,
-            pageSize: 100
-          },
+          data: requestPayload,
           headers: {
             ...BASE_HEADERS,
             'Mallid': String(mallId)  // ⭐ 关键：携带店铺 ID
@@ -236,7 +256,20 @@ class TemuApiClient {
       }
 
       const total = data.result?.total || 0;
-      const dataList = data.result?.dataList || [];
+      const rawList = data.result?.dataList || [];
+
+      // 解析数据：从 Kiana 接口响应中提取 goodsId 和 skuList
+      // Kiana 接口返回的结构：dataList[].goodsId, dataList[].skcList[].skuList[].goodsSkuId
+      const dataList = rawList.map((item: any) => ({
+        goodsId: item.goodsId,
+        goodsName: item.goodsName || '',
+        skuList: (item.skcList || []).flatMap((skc: any) =>
+          (skc.skuList || []).map((sku: any) => ({
+            goodsSkuId: sku.goodsSkuId,
+            skcId: String(skc.skcId)
+          }))
+        )
+      }));
 
       console.log('[Temu API] 已发布站点数据:', dataList.length, '/', total);
       return { total, dataList };
@@ -249,6 +282,7 @@ class TemuApiClient {
   /**
    * 查询站点异常原因
    *
+   * ⭐ 使用 Kiana 接口 queryFullyOtherMessage
    * ⭐ 必须携带 mallId 参数，每个店铺独立请求
    *
    * @param mallId 店铺 ID（必需）
@@ -261,15 +295,18 @@ class TemuApiClient {
     try {
       console.log('[Temu API] 查询站点异常 - 店铺:', mallId, '商品数:', pairs.length);
 
+      // 使用 queryFullyOtherMessage 接口
       const requestData: SiteErrorQueryRequest = {
-        mallProductVOList: pairs
+        goodsIdSkuIdPairList: pairs
       };
+
+      console.log('[Temu API] 请求载荷:', JSON.stringify(requestData));
 
       const response = await bridgeRequestWithRetry(
         TEMU_HOST,
         'bridge-fetch',
         {
-          url: 'https://agentseller.temu.com/api/bg/goods/spu/checkSiteStatus',
+          url: 'https://agentseller.temu.com/api/kiana/mms/robin/queryFullyOtherMessage',
           method: 'POST',
           data: requestData,
           headers: {

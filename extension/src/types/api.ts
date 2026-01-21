@@ -75,28 +75,43 @@ export interface PublishedDataResponse {
 }
 
 /**
- * 站点异常查询请求
+ * 站点异常查询请求（queryFullyOtherMessage 接口）
  */
 export interface SiteErrorQueryRequest {
-  mallProductVOList: Array<{
+  goodsIdSkuIdPairList: Array<{
     goodsId: number;
     skuIdList: number[];
   }>;
 }
 
 /**
- * 站点异常响应
+ * 站点异常响应（queryFullyOtherMessage 接口）
+ *
+ * 响应结构：
+ * - fullyBindSiteFailVO.goodsSkuBindSiteFailVOList[].goodsSkuId - 异常商品 SKU ID
+ * - fullyBindSiteFailVO.goodsSkuBindSiteFailVOList[].goodsSkuBindSiteFailInfoVOList[].failResultVOList[].checkDesc - 异常原因
+ * - fullyBindSiteFailVO.goodsSkuBindSiteFailVOList[].goodsSkuBindSiteFailInfoVOList[].siteName - 异常站点
+ * - fullyBindSiteFailVO.staticDescVOList[].checkDesc - 静态异常原因
  */
 export interface SiteErrorResponse {
   success?: boolean;
   result?: {
-    fullyBindSiteFailVO?: Array<{
-      goodsSkuId: number;
-      staticDescVOList?: Array<{
-        countryCodes?: string[];
-        errorMsg?: string;
+    fullyBindSiteFailVO?: {
+      goodsSkuBindSiteFailVOList?: Array<{
+        goodsSkuId: number;
+        goodsSkuBindSiteFailInfoVOList?: Array<{
+          siteName?: string;
+          failResultVOList?: Array<{
+            checkDesc?: string;
+            checkCode?: number;  // ⭐ checkCode 是数字类型
+          }>;
+        }>;
       }>;
-    }>;
+      staticDescVOList?: Array<{
+        checkDesc?: string;
+        checkCode?: number;  // ⭐ checkCode 是数字类型
+      }>;
+    };
   };
   errorCode?: number;
   errorMsg?: string;

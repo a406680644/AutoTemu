@@ -36,18 +36,20 @@ export interface UnpublishedItem {
 
 /**
  * 站点异常记录
+ *
+ * 主键：mallId + skcId（同一店铺同一 SKC 只保留一条，更新时覆盖）
  */
 export interface SiteErrorItem {
   // 唯一键字段
   mallId: string;           // 店铺 ID
   skcId: string;            // SKC ID
-  checkedAt: number;        // 检查时间戳
 
   // 数据字段
   mallName: string;         // 店铺名称
   goodsSkuId: string;       // SKU ID
   errorReasons: string[];   // 异常原因列表
   affectedSites: string[];  // 涉及的站点国家列表
+  checkedAt: number;        // 检查时间戳（更新时间）
 }
 
 /**
