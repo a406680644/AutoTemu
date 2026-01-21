@@ -123,10 +123,11 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
         const itemsByDate = new Map<string, Array<{ skcId: string; reason: string }>>();
 
         while (hasMore) {
-          // 检查停止标志
+          // 检查停止标志（请求前）
           if (await taskState.shouldStop()) {
             await taskState.clearStopFlag();
-            console.log('[下架监控] 任务被用户中止（分页循环中）');
+            console.log('[下架监控] 任务被用户中止（分页循环中-请求前）');
+            await taskState.addLog('warn', '任务已中止');
             return;
           }
 
@@ -136,6 +137,14 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
             mall.managedType,
             pageNum
           );
+
+          // 检查停止标志（请求后）
+          if (await taskState.shouldStop()) {
+            await taskState.clearStopFlag();
+            console.log('[下架监控] 任务被用户中止（分页循环中-请求后）');
+            await taskState.addLog('warn', '任务已中止');
+            return;
+          }
 
           await taskState.addLog(
             'info',
@@ -171,6 +180,13 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
 
           if (hasMore) {
             await sleep(1000);
+            // 检查停止标志（等待后）
+            if (await taskState.shouldStop()) {
+              await taskState.clearStopFlag();
+              console.log('[下架监控] 任务被用户中止（分页循环中-等待后）');
+              await taskState.addLog('warn', '任务已中止');
+              return;
+            }
           }
         }
 
@@ -218,6 +234,13 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
       // 等待 2 秒后处理下一个店铺（避免风控）
       if (i < malls.length - 1) {
         await sleep(2000);
+        // 检查停止标志（店铺间等待后）
+        if (await taskState.shouldStop()) {
+          await taskState.clearStopFlag();
+          console.log('[下架监控] 任务被用户中止（店铺间等待后）');
+          await taskState.addLog('warn', '任务已中止');
+          return;
+        }
       }
     }
 

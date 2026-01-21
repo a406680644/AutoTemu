@@ -209,10 +209,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         console.log('[SW] 下架监控任务完成');
         break;
 
-      case 'cleanup-cache':
-        const deleted = await db.clearExpiredCache();
-        console.log('[SW] 清理过期缓存完成，删除', deleted, '条');
-        break;
+      // case 'cleanup-cache':
+      //   const deleted = await db.clearExpiredCache();
+      //   console.log('[SW] 清理过期缓存完成，删除', deleted, '条');
+      //   break;
 
       case 'scheduled-push':
         console.log('[SW] 执行定时推送任务');

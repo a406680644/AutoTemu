@@ -27,7 +27,9 @@
   },
   "manifest": {
     "host_permissions": [
-      "https://agentseller.temu.com/*"
+      "https://agentseller.temu.com/*",
+      "https://open.feishu.cn/*",
+      "https://oapi.dingtalk.com/*"
     ],
     "permissions": [
       "alarms",
