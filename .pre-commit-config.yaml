@@ -64,3 +64,18 @@ repos:
         types: [python]
         files: ^backend/app/
         pass_filenames: false
+
+      # Extension 检查
+      - id: extension-format-check
+        name: extension prettier format check
+        entry: cmd /c "cd extension && pnpm format:check"
+        language: system
+        files: ^extension/src/.*\.(ts|tsx)$
+        pass_filenames: false
+
+      - id: extension-type-check
+        name: extension typescript type check
+        entry: cmd /c "cd extension && pnpm type-check"
+        language: system
+        files: ^extension/src/.*\.(ts|tsx)$
+        pass_filenames: false

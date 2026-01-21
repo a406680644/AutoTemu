@@ -12,9 +12,9 @@
  * 店铺信息
  */
 export interface Mall {
-  mallId: string;           // 店铺 ID
-  mallName: string;         // 店铺名称
-  managedType: number;      // 管理类型
+  mallId: string // 店铺 ID
+  mallName: string // 店铺名称
+  managedType: number // 管理类型
 }
 
 /**
@@ -22,10 +22,10 @@ export interface Mall {
  */
 export interface UserInfoResponse {
   result?: {
-    mallList?: Mall[];
-  };
-  errorCode?: number;
-  errorMsg?: string;
+    mallList?: Mall[]
+  }
+  errorCode?: number
+  errorMsg?: string
 }
 
 /**
@@ -33,20 +33,20 @@ export interface UserInfoResponse {
  */
 export interface UnpublishedDataResponse {
   result?: {
-    total?: number;
+    total?: number
     dataList?: Array<{
-      goodsSkuId: string;
-      skcId: string;
-      goodsName: string;
-      goodsMainImage: string;
-      unPublishedTime: number;
+      goodsSkuId: string
+      skcId: string
+      goodsName: string
+      goodsMainImage: string
+      unPublishedTime: number
       punishInfoList?: Array<{
-        reason?: string;
-      }>;
-    }>;
-  };
-  errorCode?: number;
-  errorMsg?: string;
+        reason?: string
+      }>
+    }>
+  }
+  errorCode?: number
+  errorMsg?: string
 }
 
 /**
@@ -54,18 +54,18 @@ export interface UnpublishedDataResponse {
  */
 export interface PublishedDataResponse {
   result?: {
-    total?: number;
+    total?: number
     dataList?: Array<{
-      goodsId: number;
-      goodsName: string;
+      goodsId: number
+      goodsName: string
       skuList?: Array<{
-        goodsSkuId: number;
-        skcId: string;
-      }>;
-    }>;
-  };
-  errorCode?: number;
-  errorMsg?: string;
+        goodsSkuId: number
+        skcId: string
+      }>
+    }>
+  }
+  errorCode?: number
+  errorMsg?: string
 }
 
 /**
@@ -73,9 +73,9 @@ export interface PublishedDataResponse {
  */
 export interface SiteErrorQueryRequest {
   mallProductVOList: Array<{
-    goodsId: number;
-    skuIdList: number[];
-  }>;
+    goodsId: number
+    skuIdList: number[]
+  }>
 }
 
 /**
@@ -84,15 +84,18 @@ export interface SiteErrorQueryRequest {
 export interface SiteErrorResponse {
   result?: {
     fullyBindSiteFailVO?: Array<{
-      goodsSkuId: number;
+      goodsSkuId: number
+      skcId: string
       staticDescVOList?: Array<{
-        countryCodes?: string[];
-        errorMsg?: string;
-      }>;
-    }>;
-  };
-  errorCode?: number;
-  errorMsg?: string;
+        countryCodes?: string[]
+        errorMsg?: string
+        desc?: string
+        siteName?: string
+      }>
+    }>
+  }
+  errorCode?: number
+  errorMsg?: string
 }
 
 // ============================================
@@ -103,19 +106,19 @@ export interface SiteErrorResponse {
  * 钉钉卡片消息
  */
 export interface DingtalkCardMessage {
-  msgtype: 'markdown';
+  msgtype: "markdown"
   markdown: {
-    title: string;
-    text: string;
-  };
+    title: string
+    text: string
+  }
 }
 
 /**
  * 钉钉 Webhook 响应
  */
 export interface DingtalkWebhookResponse {
-  errcode: number;
-  errmsg: string;
+  errcode: number
+  errmsg: string
 }
 
 // ============================================
@@ -126,21 +129,21 @@ export interface DingtalkWebhookResponse {
  * Bridge 请求
  */
 export interface BridgeRequest {
-  type: 'bridge-fetch';
+  type: "bridge-fetch"
   payload: {
-    url: string;
-    method?: string;
-    data?: any;
-    headers?: Record<string, string>;
-  };
+    url: string
+    method?: string
+    data?: any
+    headers?: Record<string, string>
+  }
 }
 
 /**
  * Bridge 响应
  */
 export interface BridgeResponse {
-  ok: boolean;
-  status?: number;
-  data?: any;
-  error?: string;
+  ok: boolean
+  status?: number
+  data?: any
+  error?: string
 }

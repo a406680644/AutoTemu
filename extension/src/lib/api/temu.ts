@@ -6,24 +6,25 @@
  * ⭐ 关键点：所有 API 请求必须携带 'Mallid' 请求头来指定店铺
  */
 
-import { bridgeRequestWithRetry } from './client';
 import type {
   Mall,
-  UserInfoResponse,
-  UnpublishedDataResponse,
   PublishedDataResponse,
   SiteErrorQueryRequest,
-  SiteErrorResponse
-} from '~types/api';
+  SiteErrorResponse,
+  UnpublishedDataResponse,
+  UserInfoResponse
+} from "~types/api"
+
+import { bridgeRequestWithRetry } from "./client"
 
 // Temu 卖家中心域名
-const TEMU_HOST = 'agentseller.temu.com';
+const TEMU_HOST = "agentseller.temu.com"
 
 // 基础请求头
 const BASE_HEADERS = {
-  'Content-Type': 'application/json',
-  'Accept': 'application/json'
-};
+  "Content-Type": "application/json",
+  Accept: "application/json"
+}
 
 /**
  * Temu API 客户端
@@ -34,38 +35,34 @@ class TemuApiClient {
    */
   async getMallList(): Promise<Mall[]> {
     try {
-      const response = await bridgeRequestWithRetry(
-        TEMU_HOST,
-        'bridge-fetch',
-        {
-          url: 'https://agentseller.temu.com/api/seller/auth/userInfo',
-          method: 'POST',
-          data: {},
-          headers: BASE_HEADERS
-        }
-      );
+      const response = await bridgeRequestWithRetry(TEMU_HOST, "bridge-fetch", {
+        url: "https://agentseller.temu.com/api/seller/auth/userInfo",
+        method: "POST",
+        data: {},
+        headers: BASE_HEADERS
+      })
 
       if (!response.ok) {
-        throw new Error('获取店铺列表失败: HTTP ' + response.status);
+        throw new Error("获取店铺列表失败: HTTP " + response.status)
       }
 
-      const data = response.data as UserInfoResponse;
+      const data = response.data as UserInfoResponse
 
       if (data.errorCode !== undefined && data.errorCode !== 0) {
-        throw new Error(data.errorMsg || '获取店铺列表失败');
+        throw new Error(data.errorMsg || "获取店铺列表失败")
       }
 
-      const mallList = data.result?.mallList || [];
-      console.log('[Temu API] 获取到', mallList.length, '个店铺');
+      const mallList = data.result?.mallList || []
+      console.log("[Temu API] 获取到", mallList.length, "个店铺")
 
-      return mallList.map(mall => ({
+      return mallList.map((mall) => ({
         mallId: mall.mallId,
         mallName: mall.mallName,
         managedType: mall.managedType
-      }));
+      }))
     } catch (error) {
-      console.error('[Temu API] 获取店铺列表失败:', error);
-      throw error;
+      console.error("[Temu API] 获取店铺列表失败:", error)
+      throw error
     }
   }
 
@@ -85,67 +82,63 @@ class TemuApiClient {
     timeEnd: number,
     pageNum: number = 1
   ): Promise<{
-    total: number;
+    total: number
     dataList: Array<{
-      goodsSkuId: string;
-      skcId: string;
-      goodsName: string;
-      goodsMainImage: string;
-      unPublishedTime: number;
-      unPublishedReason: string;
-    }>;
+      goodsSkuId: string
+      skcId: string
+      goodsName: string
+      goodsMainImage: string
+      unPublishedTime: number
+      unPublishedReason: string
+    }>
   }> {
     try {
-      console.log('[Temu API] 拉取已下架数据 - 店铺:', mallId, '页码:', pageNum);
+      console.log("[Temu API] 拉取已下架数据 - 店铺:", mallId, "页码:", pageNum)
 
-      const response = await bridgeRequestWithRetry(
-        TEMU_HOST,
-        'bridge-fetch',
-        {
-          url: 'https://agentseller.temu.com/api/bg/goods/offlineList/search',
-          method: 'POST',
-          data: {
-            pageNum,
-            pageSize: 100,
-            unPublishedTimeBegin: timeBegin,
-            unPublishedTimeEnd: timeEnd
-          },
-          headers: {
-            ...BASE_HEADERS,
-            'Mallid': String(mallId)  // ⭐ 关键：携带店铺 ID
-          }
+      const response = await bridgeRequestWithRetry(TEMU_HOST, "bridge-fetch", {
+        url: "https://agentseller.temu.com/api/bg/goods/offlineList/search",
+        method: "POST",
+        data: {
+          pageNum,
+          pageSize: 100,
+          unPublishedTimeBegin: timeBegin,
+          unPublishedTimeEnd: timeEnd
+        },
+        headers: {
+          ...BASE_HEADERS,
+          Mallid: String(mallId) // ⭐ 关键：携带店铺 ID
         }
-      );
+      })
 
       if (!response.ok) {
-        throw new Error('拉取已下架数据失败: HTTP ' + response.status);
+        throw new Error("拉取已下架数据失败: HTTP " + response.status)
       }
 
-      const data = response.data as UnpublishedDataResponse;
+      const data = response.data as UnpublishedDataResponse
 
       if (data.errorCode !== undefined && data.errorCode !== 0) {
-        throw new Error(data.errorMsg || '拉取已下架数据失败');
+        throw new Error(data.errorMsg || "拉取已下架数据失败")
       }
 
-      const total = data.result?.total || 0;
-      const rawList = data.result?.dataList || [];
+      const total = data.result?.total || 0
+      const rawList = data.result?.dataList || []
 
       // 解析下架原因
-      const dataList = rawList.map(item => ({
+      const dataList = rawList.map((item) => ({
         goodsSkuId: item.goodsSkuId,
         skcId: item.skcId,
         goodsName: item.goodsName,
         goodsMainImage: item.goodsMainImage,
         unPublishedTime: item.unPublishedTime,
         // 解析下架原因（punishInfoList.reason 为 null 时兜底为"运营手动下架"）
-        unPublishedReason: item.punishInfoList?.[0]?.reason || '运营手动下架'
-      }));
+        unPublishedReason: item.punishInfoList?.[0]?.reason || "运营手动下架"
+      }))
 
-      console.log('[Temu API] 已下架数据:', dataList.length, '/', total);
-      return { total, dataList };
+      console.log("[Temu API] 已下架数据:", dataList.length, "/", total)
+      return { total, dataList }
     } catch (error) {
-      console.error('[Temu API] 拉取已下架数据失败:', error);
-      throw error;
+      console.error("[Temu API] 拉取已下架数据失败:", error)
+      throw error
     }
   }
 
@@ -161,54 +154,55 @@ class TemuApiClient {
     mallId: string,
     pageNum: number = 1
   ): Promise<{
-    total: number;
+    total: number
     dataList: Array<{
-      goodsId: number;
-      goodsName: string;
-      skuList: Array<{
-        goodsSkuId: number;
-        skcId: string;
-      }>;
-    }>;
+      goodsId: number
+      goodsName: string
+      skuList?: Array<{
+        goodsSkuId: number
+        skcId: string
+      }>
+    }>
   }> {
     try {
-      console.log('[Temu API] 拉取已发布站点数据 - 店铺:', mallId, '页码:', pageNum);
+      console.log(
+        "[Temu API] 拉取已发布站点数据 - 店铺:",
+        mallId,
+        "页码:",
+        pageNum
+      )
 
-      const response = await bridgeRequestWithRetry(
-        TEMU_HOST,
-        'bridge-fetch',
-        {
-          url: 'https://agentseller.temu.com/api/bg/goods/spu/querySpuList',
-          method: 'POST',
-          data: {
-            pageNum,
-            pageSize: 100
-          },
-          headers: {
-            ...BASE_HEADERS,
-            'Mallid': String(mallId)  // ⭐ 关键：携带店铺 ID
-          }
+      const response = await bridgeRequestWithRetry(TEMU_HOST, "bridge-fetch", {
+        url: "https://agentseller.temu.com/api/bg/goods/spu/querySpuList",
+        method: "POST",
+        data: {
+          pageNum,
+          pageSize: 100
+        },
+        headers: {
+          ...BASE_HEADERS,
+          Mallid: String(mallId) // ⭐ 关键：携带店铺 ID
         }
-      );
+      })
 
       if (!response.ok) {
-        throw new Error('拉取已发布站点数据失败: HTTP ' + response.status);
+        throw new Error("拉取已发布站点数据失败: HTTP " + response.status)
       }
 
-      const data = response.data as PublishedDataResponse;
+      const data = response.data as PublishedDataResponse
 
       if (data.errorCode !== undefined && data.errorCode !== 0) {
-        throw new Error(data.errorMsg || '拉取已发布站点数据失败');
+        throw new Error(data.errorMsg || "拉取已发布站点数据失败")
       }
 
-      const total = data.result?.total || 0;
-      const dataList = data.result?.dataList || [];
+      const total = data.result?.total || 0
+      const dataList = data.result?.dataList || []
 
-      console.log('[Temu API] 已发布站点数据:', dataList.length, '/', total);
-      return { total, dataList };
+      console.log("[Temu API] 已发布站点数据:", dataList.length, "/", total)
+      return { total, dataList }
     } catch (error) {
-      console.error('[Temu API] 拉取已发布站点数据失败:', error);
-      throw error;
+      console.error("[Temu API] 拉取已发布站点数据失败:", error)
+      throw error
     }
   }
 
@@ -225,44 +219,45 @@ class TemuApiClient {
     pairs: Array<{ goodsId: number; skuIdList: number[] }>
   ): Promise<SiteErrorResponse> {
     try {
-      console.log('[Temu API] 查询站点异常 - 店铺:', mallId, '商品数:', pairs.length);
+      console.log(
+        "[Temu API] 查询站点异常 - 店铺:",
+        mallId,
+        "商品数:",
+        pairs.length
+      )
 
       const requestData: SiteErrorQueryRequest = {
         mallProductVOList: pairs
-      };
+      }
 
-      const response = await bridgeRequestWithRetry(
-        TEMU_HOST,
-        'bridge-fetch',
-        {
-          url: 'https://agentseller.temu.com/api/bg/goods/spu/checkSiteStatus',
-          method: 'POST',
-          data: requestData,
-          headers: {
-            ...BASE_HEADERS,
-            'Mallid': String(mallId)  // ⭐ 关键：携带店铺 ID
-          }
+      const response = await bridgeRequestWithRetry(TEMU_HOST, "bridge-fetch", {
+        url: "https://agentseller.temu.com/api/bg/goods/spu/checkSiteStatus",
+        method: "POST",
+        data: requestData,
+        headers: {
+          ...BASE_HEADERS,
+          Mallid: String(mallId) // ⭐ 关键：携带店铺 ID
         }
-      );
+      })
 
       if (!response.ok) {
-        throw new Error('查询站点异常失败: HTTP ' + response.status);
+        throw new Error("查询站点异常失败: HTTP " + response.status)
       }
 
-      const data = response.data as SiteErrorResponse;
+      const data = response.data as SiteErrorResponse
 
       if (data.errorCode !== undefined && data.errorCode !== 0) {
-        throw new Error(data.errorMsg || '查询站点异常失败');
+        throw new Error(data.errorMsg || "查询站点异常失败")
       }
 
-      console.log('[Temu API] 站点异常查询完成');
-      return data;
+      console.log("[Temu API] 站点异常查询完成")
+      return data
     } catch (error) {
-      console.error('[Temu API] 查询站点异常失败:', error);
-      throw error;
+      console.error("[Temu API] 查询站点异常失败:", error)
+      throw error
     }
   }
 }
 
 // 导出单例
-export const temuApi = new TemuApiClient();
+export const temuApi = new TemuApiClient()

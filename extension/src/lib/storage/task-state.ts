@@ -5,8 +5,8 @@
  * 状态存储在 chrome.storage.local 中，支持实时同步
  */
 
-import type { TaskState, TaskStatus, TaskLog, LogLevel } from '~types/storage';
-import { CONFIG_KEYS } from '~types/storage';
+import type { LogLevel, TaskLog, TaskState, TaskStatus } from "~types/storage"
+import { CONFIG_KEYS } from "~types/storage"
 
 /**
  * 任务状态管理器
@@ -16,24 +16,26 @@ class TaskStateManager {
    * 获取当前任务状态
    */
   async get(): Promise<TaskState> {
-    const result = await chrome.storage.local.get(CONFIG_KEYS.TASK_STATE);
-    return result[CONFIG_KEYS.TASK_STATE] || this.getDefaultState();
+    const result = await chrome.storage.local.get(CONFIG_KEYS.TASK_STATE)
+    return result[CONFIG_KEYS.TASK_STATE] || this.getDefaultState()
   }
 
   /**
    * 设置任务状态
    */
   async set(state: Partial<TaskState>): Promise<void> {
-    const current = await this.get();
-    const updated = { ...current, ...state };
-    await chrome.storage.local.set({ [CONFIG_KEYS.TASK_STATE]: updated });
+    const current = await this.get()
+    const updated = { ...current, ...state }
+    await chrome.storage.local.set({ [CONFIG_KEYS.TASK_STATE]: updated })
   }
 
   /**
    * 重置任务状态
    */
   async reset(): Promise<void> {
-    await chrome.storage.local.set({ [CONFIG_KEYS.TASK_STATE]: this.getDefaultState() });
+    await chrome.storage.local.set({
+      [CONFIG_KEYS.TASK_STATE]: this.getDefaultState()
+    })
   }
 
   /**
@@ -41,12 +43,12 @@ class TaskStateManager {
    */
   private getDefaultState(): TaskState {
     return {
-      status: 'idle',
+      status: "idle",
       progress: 0,
       totalMalls: 0,
       completedMalls: 0,
       logs: []
-    };
+    }
   }
 
   // ============================================
@@ -58,7 +60,7 @@ class TaskStateManager {
    */
   async start(totalMalls: number): Promise<void> {
     await this.set({
-      status: 'running',
+      status: "running",
       progress: 0,
       totalMalls,
       completedMalls: 0,
@@ -66,23 +68,27 @@ class TaskStateManager {
       endTime: undefined,
       error: undefined,
       logs: []
-    });
+    })
   }
 
   /**
    * 更新进度
    */
-  async updateProgress(completedMalls: number, currentMall?: string): Promise<void> {
-    const state = await this.get();
-    const progress = state.totalMalls > 0
-      ? Math.round((completedMalls / state.totalMalls) * 100)
-      : 0;
+  async updateProgress(
+    completedMalls: number,
+    currentMall?: string
+  ): Promise<void> {
+    const state = await this.get()
+    const progress =
+      state.totalMalls > 0
+        ? Math.round((completedMalls / state.totalMalls) * 100)
+        : 0
 
     await this.set({
       progress,
       completedMalls,
       currentMall
-    });
+    })
   }
 
   /**
@@ -90,11 +96,11 @@ class TaskStateManager {
    */
   async complete(): Promise<void> {
     await this.set({
-      status: 'done',
+      status: "done",
       progress: 100,
       endTime: Date.now(),
       currentMall: undefined
-    });
+    })
   }
 
   /**
@@ -102,10 +108,10 @@ class TaskStateManager {
    */
   async fail(error: string): Promise<void> {
     await this.set({
-      status: 'fail',
+      status: "fail",
       endTime: Date.now(),
       error
-    });
+    })
   }
 
   // ============================================
@@ -116,41 +122,41 @@ class TaskStateManager {
    * 添加日志
    */
   async addLog(level: LogLevel, message: string): Promise<void> {
-    const state = await this.get();
+    const state = await this.get()
     const log: TaskLog = {
       timestamp: Date.now(),
       level,
       message
-    };
-
-    // 限制日志数量（最多 1000 条）
-    const logs = [...state.logs, log];
-    if (logs.length > 1000) {
-      logs.splice(0, logs.length - 1000);
     }
 
-    await this.set({ logs });
+    // 限制日志数量（最多 1000 条）
+    const logs = [...state.logs, log]
+    if (logs.length > 1000) {
+      logs.splice(0, logs.length - 1000)
+    }
+
+    await this.set({ logs })
   }
 
   /**
    * 清空日志
    */
   async clearLogs(): Promise<void> {
-    await this.set({ logs: [] });
+    await this.set({ logs: [] })
   }
 
   /**
    * 获取格式化的日志文本
    */
   async getFormattedLogs(): Promise<string> {
-    const state = await this.get();
+    const state = await this.get()
     return state.logs
-      .map(log => {
-        const time = new Date(log.timestamp).toLocaleTimeString();
-        const level = log.level.toUpperCase().padEnd(5);
-        return `[${time}] [${level}] ${log.message}`;
+      .map((log) => {
+        const time = new Date(log.timestamp).toLocaleTimeString()
+        const level = log.level.toUpperCase().padEnd(5)
+        return `[${time}] [${level}] ${log.message}`
       })
-      .join('\n');
+      .join("\n")
   }
 
   // ============================================
@@ -163,15 +169,15 @@ class TaskStateManager {
    */
   onChange(callback: (state: TaskState) => void): void {
     chrome.storage.onChanged.addListener((changes, namespace) => {
-      if (namespace === 'local' && changes[CONFIG_KEYS.TASK_STATE]) {
-        const newValue = changes[CONFIG_KEYS.TASK_STATE].newValue;
+      if (namespace === "local" && changes[CONFIG_KEYS.TASK_STATE]) {
+        const newValue = changes[CONFIG_KEYS.TASK_STATE].newValue
         if (newValue) {
-          callback(newValue);
+          callback(newValue)
         }
       }
-    });
+    })
   }
 }
 
 // 导出单例
-export const taskState = new TaskStateManager();
+export const taskState = new TaskStateManager()
