@@ -18,8 +18,9 @@ export type TaskType = "unpublished" | "site-error"
  * 运行任务请求
  */
 export interface RunTaskRequest {
-  taskType: TaskType // 任务类型
-  mallIds?: string[] // 指定店铺 ID 列表（空表示所有店铺）
+  taskType: TaskType;       // 任务类型
+  mallIds?: string[];       // 指定店铺 ID 列表（空表示所有店铺）
+  skipPush?: boolean;       // 是否跳过推送（用于 RPA 凌晨采集场景）
 }
 
 /**
@@ -44,10 +45,11 @@ export interface GetStatusResponse {
   endTime?: number
   error?: string
   logs: Array<{
-    timestamp: number
-    level: string
-    message: string
-  }>
+    timestamp: number;
+    level: string;
+    message: string;
+  }>;
+  fetchedData?: any[];  // 拉取的数据（用于展示）
 }
 
 /**

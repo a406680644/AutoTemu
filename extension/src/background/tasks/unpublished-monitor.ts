@@ -5,29 +5,77 @@
  * 1. 获取所有店铺列表
  * 2. 逐个店铺串行执行（避免风控）
  * 3. 拉取已下架数据
- * 4. 去重判定
- * 5. 按店铺聚合推送钉钉
- * 6. 保存到 IndexedDB
+ * 4. 按店铺+日期聚合，相同原因的 SKC 归纳
+ * 5. 保存到 IndexedDB（每店铺每天一条记录，已存在则更新）
+ * 6. 推送通知（可选，由 skipPush 参数控制）
+ *
+ * 去重说明：
+ * - 存储：不去重，每次运行都存储/更新所有数据
+ * - 推送：通过 IndexedDB 的 pushed 字段控制（定时推送任务使用）
  */
 
-import { dingtalkApi } from "~lib/api/dingtalk"
-import { temuApi } from "~lib/api/temu"
-import { config } from "~lib/storage/config"
-import { dedup, generateUnpublishedKey } from "~lib/storage/dedup"
-import db from "~lib/storage/idb"
-import { taskState } from "~lib/storage/task-state"
-import { sleep } from "~lib/utils/retry"
-import type { UnpublishedItem } from "~types/storage"
+import { temuApi } from '~lib/api/temu';
+import { notifier } from '~lib/api/notifier';
+import { config } from '~lib/storage/config';
+import { taskState } from '~lib/storage/task-state';
+import { formatDateKey } from '~lib/storage/dedup';
+import db from '~lib/storage/idb';
+import type { UnpublishedItem, ReasonGroup } from '~types/storage';
+import { sleep } from '~lib/utils/retry';
+
+/**
+ * 将 SKC 列表按原因分组
+ * ⭐ 注意：对原因 trim() 去除首尾空白字符，避免相同原因因空白不同而未去重
+ */
+function groupByReason(
+  items: Array<{ skcId: string; reason: string }>
+): ReasonGroup[] {
+  const groupMap = new Map<string, string[]>();
+
+  for (const item of items) {
+    // trim 去除首尾空白字符（包括换行符）
+    const reason = item.reason?.trim() || '运营手动下架';
+    const existing = groupMap.get(reason);
+    if (existing) {
+      existing.push(item.skcId);
+    } else {
+      groupMap.set(reason, [item.skcId]);
+    }
+  }
+
+  return Array.from(groupMap.entries()).map(([reason, skcIds]) => ({
+    reason,
+    skcIds
+  }));
+}
+
+/**
+ * 监控任务选项
+ */
+export interface MonitorOptions {
+  /** 指定店铺 ID 列表（空表示所有店铺） */
+  mallIds?: string[];
+  /** 是否跳过推送（用于 RPA 凌晨采集场景） */
+  skipPush?: boolean;
+}
 
 /**
  * 运行已下架商品监控任务
  *
- * @param mallIds 可选：指定店铺 ID 列表（空表示所有店铺）
+ * @param options 任务选项
+ *   - mallIds: 指定店铺 ID 列表（空表示所有店铺）
+ *   - skipPush: 是否跳过推送（默认 false，用于 RPA 凌晨采集场景）
  */
-export async function runUnpublishedMonitor(mallIds?: string[]): Promise<void> {
+export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<void> {
+  const mallIds = options?.mallIds;
+  const skipPush = options?.skipPush ?? false;
   try {
     console.log("[下架监控] 开始执行任务")
     await taskState.addLog("info", "开始执行下架监控任务")
+
+    // 清理停止标志和展示数据
+    await taskState.clearStopFlag();
+    await taskState.clearFetchedData();
 
     // 步骤 1: 获取店铺列表
     await taskState.addLog("info", "获取店铺列表...")
@@ -49,12 +97,20 @@ export async function runUnpublishedMonitor(mallIds?: string[]): Promise<void> {
     await taskState.start(malls.length)
 
     // 步骤 2: 逐个店铺串行执行
-    const newRecordsByMall = new Map<string, UnpublishedItem[]>()
+    // 存储结构：mallId -> date -> UnpublishedItem
+    const recordsByMallDate = new Map<string, Map<string, UnpublishedItem>>();
 
     for (let i = 0; i < malls.length; i++) {
-      const mall = malls[i]
-      const mallName = mall.mallName
-      const mallId = mall.mallId
+      // 检查是否需要停止
+      if (await taskState.shouldStop()) {
+        await taskState.clearStopFlag();
+        console.log('[下架监控] 任务被用户中止');
+        return;
+      }
+
+      const mall = malls[i];
+      const mallName = mall.mallName;
+      const mallId = mall.mallId;
 
       await taskState.addLog(
         "info",
@@ -63,57 +119,61 @@ export async function runUnpublishedMonitor(mallIds?: string[]): Promise<void> {
       await taskState.updateProgress(i, mallName)
 
       try {
-        // 步骤 2.1: 拉取该店铺的已下架数据（最近 7 天）
-        const timeEnd = Date.now()
-        const timeBegin = timeEnd - 7 * 24 * 60 * 60 * 1000 // 7 天前
-
-        let pageNum = 1
-        let hasMore = true
-        const mallNewRecords: UnpublishedItem[] = []
+        // 步骤 2.1: 拉取该店铺的已下架数据
+        let pageNum = 1;
+        let hasMore = true;
+        // 临时存储：date -> [{skcId, reason}]
+        const itemsByDate = new Map<string, Array<{ skcId: string; reason: string }>>();
 
         while (hasMore) {
+          // 检查停止标志（请求前）
+          if (await taskState.shouldStop()) {
+            await taskState.clearStopFlag();
+            console.log('[下架监控] 任务被用户中止（分页循环中-请求前）');
+            await taskState.addLog('warn', '任务已中止');
+            return;
+          }
+
+          // 根据 managedType 选择接口：0=全托, 1=半托
           const result = await temuApi.fetchUnpublishedData(
             mallId,
-            timeBegin,
-            timeEnd,
+            mall.managedType,
             pageNum
           )
+
+          // 检查停止标志（请求后）
+          if (await taskState.shouldStop()) {
+            await taskState.clearStopFlag();
+            console.log('[下架监控] 任务被用户中止（分页循环中-请求后）');
+            await taskState.addLog('warn', '任务已中止');
+            return;
+          }
 
           await taskState.addLog(
             "info",
             `店铺 ${mallName}: 拉取第 ${pageNum} 页，共 ${result.total} 条记录`
           )
 
-          // 步骤 2.2: 解析并去重
+          // 保存拉取的数据用于展示
+          const displayItems = result.dataList.map(item => ({
+            ...item,
+            mallId,
+            mallName
+          }));
+          await taskState.addFetchedData(displayItems);
+
+          // 步骤 2.2: 按日期分组（所有数据都存储，不去重）
           for (const item of result.dataList) {
-            const key = generateUnpublishedKey(
-              mallId,
-              item.goodsSkuId,
-              item.unPublishedTime
-            )
+            const dateKey = formatDateKey(item.unPublishedTime);
 
-            // 判断是否为新记录
-            const isNew = await dedup.isNewUnpublished(
-              mallId,
-              item.goodsSkuId,
-              item.unPublishedTime
-            )
-
-            if (isNew) {
-              const record: UnpublishedItem = {
-                mallId,
-                goodsSkuId: item.goodsSkuId,
-                unPublishedTime: item.unPublishedTime,
-                skcId: item.skcId,
-                goodsName: item.goodsName,
-                goodsMainImage: item.goodsMainImage,
-                unPublishedReason: item.unPublishedReason,
-                createdAt: Date.now(),
-                pushed: false
-              }
-
-              mallNewRecords.push(record)
+            // 按日期分组
+            if (!itemsByDate.has(dateKey)) {
+              itemsByDate.set(dateKey, []);
             }
+            itemsByDate.get(dateKey)!.push({
+              skcId: item.skcId,
+              reason: item.unPublishedReason
+            });
           }
 
           // 检查是否还有更多页
@@ -121,22 +181,50 @@ export async function runUnpublishedMonitor(mallIds?: string[]): Promise<void> {
           hasMore = pageNum < totalPages
           pageNum++
 
-          // 避免请求过快
           if (hasMore) {
-            await sleep(1000)
+            await sleep(1000);
+            // 检查停止标志（等待后）
+            if (await taskState.shouldStop()) {
+              await taskState.clearStopFlag();
+              console.log('[下架监控] 任务被用户中止（分页循环中-等待后）');
+              await taskState.addLog('warn', '任务已中止');
+              return;
+            }
           }
         }
 
-        // 步骤 2.3: 保存新记录到 IndexedDB
-        if (mallNewRecords.length > 0) {
-          await db.putBatch("unpublished", mallNewRecords)
-          newRecordsByMall.set(mallId, mallNewRecords)
+        // 步骤 2.3: 构建聚合记录（每店铺每天一条）
+        if (itemsByDate.size > 0) {
+          if (!recordsByMallDate.has(mallId)) {
+            recordsByMallDate.set(mallId, new Map());
+          }
+          const mallDateMap = recordsByMallDate.get(mallId)!;
+
+          let totalCount = 0;
+          for (const [dateKey, items] of itemsByDate) {
+            // 按原因分组
+            const reasonGroups = groupByReason(items);
+            const count = items.length;
+            totalCount += count;
+
+            const record: UnpublishedItem = {
+              mallId,
+              unPublishedDate: dateKey,
+              mallName,
+              reasonGroups,
+              totalCount: count,
+              pushed: false  // 新采集的数据默认未推送
+            };
+
+            mallDateMap.set(dateKey, record);
+          }
+
           await taskState.addLog(
-            "info",
-            `店铺 ${mallName}: 发现 ${mallNewRecords.length} 条新下架记录`
-          )
+            'info',
+            `店铺 ${mallName}: 采集到 ${totalCount} 条下架记录`
+          );
         } else {
-          await taskState.addLog("info", `店铺 ${mallName}: 无新下架记录`)
+          await taskState.addLog('info', `店铺 ${mallName}: 无下架记录`);
         }
       } catch (error) {
         await taskState.addLog(
@@ -147,52 +235,106 @@ export async function runUnpublishedMonitor(mallIds?: string[]): Promise<void> {
 
       // 等待 2 秒后处理下一个店铺（避免风控）
       if (i < malls.length - 1) {
-        await sleep(2000)
+        await sleep(2000);
+        // 检查停止标志（店铺间等待后）
+        if (await taskState.shouldStop()) {
+          await taskState.clearStopFlag();
+          console.log('[下架监控] 任务被用户中止（店铺间等待后）');
+          await taskState.addLog('warn', '任务已中止');
+          return;
+        }
       }
     }
 
-    // 步骤 3: 推送到钉钉（按店铺聚合）
-    const webhookUrl = await config.getDingtalkWebhook()
-    if (webhookUrl && newRecordsByMall.size > 0) {
-      await taskState.addLog("info", "推送钉钉通知...")
-
-      for (const [mallId, records] of newRecordsByMall) {
-        const mall = malls.find((m) => m.mallId === mallId)
-        if (!mall) continue
-
-        try {
-          // 构建钉钉卡片
-          const card = dingtalkApi.buildUnpublishedCard(
-            mall.mallName,
-            records,
-            mallId
-          )
-
-          // 发送钉钉消息
-          await dingtalkApi.sendCard(webhookUrl, card)
-
-          // 标记为已推送
-          const keys = records.map((r) =>
-            generateUnpublishedKey(r.mallId, r.goodsSkuId, r.unPublishedTime)
-          )
-          await dedup.markAsPushed(keys)
-
-          await taskState.addLog(
-            "info",
-            `店铺 ${mall.mallName}: 钉钉推送成功 (${records.length} 条)`
-          )
-
-          // 避免推送过快
-          await sleep(1000)
-        } catch (error) {
-          await taskState.addLog(
-            "error",
-            `店铺 ${mall.mallName} 钉钉推送失败: ${error instanceof Error ? error.message : String(error)}`
-          )
-        }
+    // 步骤 3: 保存到 IndexedDB（已存在则更新）
+    const allRecords: UnpublishedItem[] = [];
+    for (const [, dateMap] of recordsByMallDate) {
+      for (const [, record] of dateMap) {
+        allRecords.push(record);
       }
-    } else if (!webhookUrl) {
-      await taskState.addLog("warn", "未配置钉钉 Webhook，跳过推送")
+    }
+
+    if (allRecords.length > 0) {
+      console.log('[下架监控] 准备保存记录:', JSON.stringify(allRecords, null, 2));
+      const saveResult = await db.putBatch('unpublished', allRecords);
+      console.log('[下架监控] 保存结果:', saveResult);
+      if (saveResult.errors.length > 0) {
+        console.error('[下架监控] 保存错误:', saveResult.errors);
+        await taskState.addLog('error', `保存失败: ${saveResult.errors.length} 条错误`);
+      }
+      await taskState.addLog('info', `保存 ${saveResult.success} 条聚合记录到数据库（已存在则更新）`);
+    }
+
+    // 步骤 4: 推送通知（支持钉钉/飞书/两者）
+    // 如果 skipPush 为 true，则仅采集不推送（用于 RPA 凌晨采集场景）
+    if (skipPush) {
+      if (allRecords.length > 0) {
+        // 统计
+        let totalSkcCount = 0;
+        for (const record of allRecords) {
+          totalSkcCount += record.totalCount;
+        }
+        await taskState.addLog(
+          'info',
+          `采集完成（跳过推送）: ${recordsByMallDate.size} 个店铺, ${totalSkcCount} 条 SKC，等待定时推送`
+        );
+      } else {
+        await taskState.addLog('info', '无下架记录');
+      }
+    } else if (allRecords.length > 0) {
+      await taskState.addLog('info', '推送通知...');
+
+      try {
+        // 使用统一推送管理器发送
+        const notifyResult = await notifier.sendUnpublishedAlert(recordsByMallDate);
+
+        // 更新数据库中的 pushed 标记
+        for (const record of allRecords) {
+          record.pushed = true;
+        }
+        await db.putBatch('unpublished', allRecords);
+
+        // 统计
+        let totalSkcCount = 0;
+        for (const record of allRecords) {
+          totalSkcCount += record.totalCount;
+        }
+
+        // 构建推送结果日志
+        const successChannels: string[] = [];
+        if (notifyResult.dingtalk) successChannels.push('钉钉');
+        if (notifyResult.feishu) successChannels.push('飞书');
+
+        if (successChannels.length > 0) {
+          await taskState.addLog(
+            'info',
+            `推送成功 [${successChannels.join('+')}]: ${recordsByMallDate.size} 个店铺, ${totalSkcCount} 条 SKC`
+          );
+        }
+
+        // 记录推送失败的渠道
+        if (notifyResult.errors.length > 0) {
+          await taskState.addLog(
+            'warn',
+            `部分渠道推送失败: ${notifyResult.errors.join('; ')}`
+          );
+        }
+
+        // 如果所有渠道都失败
+        if (!notifyResult.dingtalk && !notifyResult.feishu) {
+          const channel = await config.getNotifyChannel();
+          if (channel !== 'none') {
+            await taskState.addLog('warn', '所有推送渠道均失败或未配置');
+          }
+        }
+      } catch (error) {
+        await taskState.addLog(
+          'error',
+          `推送失败: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    } else {
+      await taskState.addLog('info', '无下架记录，跳过推送');
     }
 
     // 任务完成

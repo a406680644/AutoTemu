@@ -4,8 +4,8 @@
  * 封装 chrome.storage.local 操作，提供类型安全的配置读写
  */
 
-import type { UserConfig } from "~types/storage"
-import { CONFIG_KEYS } from "~types/storage"
+import type { UserConfig, NotifyChannel } from '~types/storage';
+import { CONFIG_KEYS } from '~types/storage';
 
 /**
  * 配置管理器
@@ -34,8 +34,11 @@ class ConfigManager {
    * 获取所有配置
    */
   async getAll(): Promise<Record<string, any>> {
-    const result = await chrome.storage.local.get(null)
-    return result as unknown as Record<string, any>
+    return new Promise((resolve) => {
+      chrome.storage.local.get(null, (result) => {
+        resolve(result || {});
+      });
+    });
   }
 
   /**
@@ -94,18 +97,128 @@ class ConfigManager {
     await chrome.runtime.sendMessage({ type: "UPDATE_ALARMS" })
   }
 
+  // ============================================
+  // 飞书配置方法
+  // ============================================
+
+  /**
+   * 获取飞书 App ID
+   */
+  async getFeishuAppId(): Promise<string | undefined> {
+    return this.get(CONFIG_KEYS.FEISHU_APP_ID, undefined);
+  }
+
+  /**
+   * 设置飞书 App ID
+   */
+  async setFeishuAppId(appId: string): Promise<void> {
+    await this.set(CONFIG_KEYS.FEISHU_APP_ID, appId);
+  }
+
+  /**
+   * 获取飞书 App Secret
+   */
+  async getFeishuAppSecret(): Promise<string | undefined> {
+    return this.get(CONFIG_KEYS.FEISHU_APP_SECRET, undefined);
+  }
+
+  /**
+   * 设置飞书 App Secret
+   */
+  async setFeishuAppSecret(appSecret: string): Promise<void> {
+    await this.set(CONFIG_KEYS.FEISHU_APP_SECRET, appSecret);
+  }
+
+  /**
+   * 获取飞书群聊 ID
+   */
+  async getFeishuChatId(): Promise<string | undefined> {
+    return this.get(CONFIG_KEYS.FEISHU_CHAT_ID, undefined);
+  }
+
+  /**
+   * 设置飞书群聊 ID
+   */
+  async setFeishuChatId(chatId: string): Promise<void> {
+    await this.set(CONFIG_KEYS.FEISHU_CHAT_ID, chatId);
+  }
+
+  /**
+   * 获取推送渠道
+   */
+  async getNotifyChannel(): Promise<NotifyChannel> {
+    return this.get(CONFIG_KEYS.NOTIFY_CHANNEL, 'feishu');
+  }
+
+  /**
+   * 设置推送渠道
+   */
+  async setNotifyChannel(channel: NotifyChannel): Promise<void> {
+    await this.set(CONFIG_KEYS.NOTIFY_CHANNEL, channel);
+  }
+
+  // ============================================
+  // 定时推送配置方法
+  // ============================================
+
+  /**
+   * 获取定时推送时间
+   * @returns 推送时间字符串 "HH:MM"，默认 "09:00"
+   */
+  async getPushTime(): Promise<string> {
+    return this.get(CONFIG_KEYS.PUSH_TIME, '09:00');
+  }
+
+  /**
+   * 设置定时推送时间
+   * @param time 时间字符串 "HH:MM"
+   */
+  async setPushTime(time: string): Promise<void> {
+    await this.set(CONFIG_KEYS.PUSH_TIME, time);
+    // 通知 Service Worker 更新 alarm
+    await chrome.runtime.sendMessage({ type: 'UPDATE_PUSH_ALARM' });
+  }
+
+  /**
+   * 获取定时推送启用状态
+   */
+  async getPushEnabled(): Promise<boolean> {
+    return this.get(CONFIG_KEYS.PUSH_ENABLED, false);
+  }
+
+  /**
+   * 设置定时推送启用状态
+   */
+  async setPushEnabled(enabled: boolean): Promise<void> {
+    await this.set(CONFIG_KEYS.PUSH_ENABLED, enabled);
+    // 通知 Service Worker 更新 alarm
+    await chrome.runtime.sendMessage({ type: 'UPDATE_PUSH_ALARM' });
+  }
+
   /**
    * 获取用户配置对象
    */
   async getUserConfig(): Promise<UserConfig> {
     const result = await chrome.storage.local.get([
       CONFIG_KEYS.DINGTALK_WEBHOOK,
+      CONFIG_KEYS.FEISHU_APP_ID,
+      CONFIG_KEYS.FEISHU_APP_SECRET,
+      CONFIG_KEYS.FEISHU_CHAT_ID,
+      CONFIG_KEYS.NOTIFY_CHANNEL,
+      CONFIG_KEYS.PUSH_TIME,
+      CONFIG_KEYS.PUSH_ENABLED,
       CONFIG_KEYS.SYNC_INTERVAL,
       CONFIG_KEYS.ENABLED
     ])
 
     return {
       dingtalk_webhook: result[CONFIG_KEYS.DINGTALK_WEBHOOK],
+      feishu_app_id: result[CONFIG_KEYS.FEISHU_APP_ID],
+      feishu_app_secret: result[CONFIG_KEYS.FEISHU_APP_SECRET],
+      feishu_chat_id: result[CONFIG_KEYS.FEISHU_CHAT_ID],
+      notify_channel: result[CONFIG_KEYS.NOTIFY_CHANNEL] || 'feishu',
+      push_time: result[CONFIG_KEYS.PUSH_TIME] || '09:00',
+      push_enabled: result[CONFIG_KEYS.PUSH_ENABLED] || false,
       sync_interval: result[CONFIG_KEYS.SYNC_INTERVAL] || 30,
       enabled: result[CONFIG_KEYS.ENABLED] || false
     }
@@ -114,24 +227,47 @@ class ConfigManager {
   /**
    * 保存用户配置对象
    */
-  async setUserConfig(config: UserConfig): Promise<void> {
-    const data: Record<string, any> = {}
+  async setUserConfig(userConfig: UserConfig): Promise<void> {
+    const data: Record<string, any> = {};
 
-    if (config.dingtalk_webhook !== undefined) {
-      data[CONFIG_KEYS.DINGTALK_WEBHOOK] = config.dingtalk_webhook
+    if (userConfig.dingtalk_webhook !== undefined) {
+      data[CONFIG_KEYS.DINGTALK_WEBHOOK] = userConfig.dingtalk_webhook;
     }
-    if (config.sync_interval !== undefined) {
-      data[CONFIG_KEYS.SYNC_INTERVAL] = config.sync_interval
+    if (userConfig.feishu_app_id !== undefined) {
+      data[CONFIG_KEYS.FEISHU_APP_ID] = userConfig.feishu_app_id;
     }
-    if (config.enabled !== undefined) {
-      data[CONFIG_KEYS.ENABLED] = config.enabled
+    if (userConfig.feishu_app_secret !== undefined) {
+      data[CONFIG_KEYS.FEISHU_APP_SECRET] = userConfig.feishu_app_secret;
+    }
+    if (userConfig.feishu_chat_id !== undefined) {
+      data[CONFIG_KEYS.FEISHU_CHAT_ID] = userConfig.feishu_chat_id;
+    }
+    if (userConfig.notify_channel !== undefined) {
+      data[CONFIG_KEYS.NOTIFY_CHANNEL] = userConfig.notify_channel;
+    }
+    if (userConfig.push_time !== undefined) {
+      data[CONFIG_KEYS.PUSH_TIME] = userConfig.push_time;
+    }
+    if (userConfig.push_enabled !== undefined) {
+      data[CONFIG_KEYS.PUSH_ENABLED] = userConfig.push_enabled;
+    }
+    if (userConfig.sync_interval !== undefined) {
+      data[CONFIG_KEYS.SYNC_INTERVAL] = userConfig.sync_interval;
+    }
+    if (userConfig.enabled !== undefined) {
+      data[CONFIG_KEYS.ENABLED] = userConfig.enabled;
     }
 
     await chrome.storage.local.set(data)
 
     // 如果启用状态改变，更新定时任务
-    if (config.enabled !== undefined) {
-      await chrome.runtime.sendMessage({ type: "UPDATE_ALARMS" })
+    if (userConfig.enabled !== undefined) {
+      await chrome.runtime.sendMessage({ type: 'UPDATE_ALARMS' });
+    }
+
+    // 如果定时推送配置改变，更新推送 alarm
+    if (userConfig.push_time !== undefined || userConfig.push_enabled !== undefined) {
+      await chrome.runtime.sendMessage({ type: 'UPDATE_PUSH_ALARM' });
     }
   }
 }

@@ -1,11 +1,12 @@
 /**
  * API 请求客户端
  *
- * 提供统一的请求接口，通过 Content Script Bridge 发送跨域请求
+ * 直接调用 Bridge 处理逻辑（因为代码运行在 Service Worker 中）
  */
 
-import { withRetry, withTimeout } from "~lib/utils/retry"
-import type { BridgeRequest, BridgeResponse } from "~types/api"
+import type { BridgeResponse } from '~types/api';
+import { handleBridgeRequest } from './bridge-handler';
+import { withRetry, withTimeout } from '~lib/utils/retry';
 
 /**
  * 通过 Content Script Bridge 发送请求
@@ -24,32 +25,19 @@ export async function bridgeRequest(
     headers?: Record<string, string>
   }
 ): Promise<BridgeResponse> {
-  // 包装请求为 BRIDGE_REQUEST 消息
-  const message = {
-    type: "BRIDGE_REQUEST",
-    targetHost,
-    requestData: {
-      type: messageType,
-      payload
-    }
+  console.log('[API Client] 请求:', payload.url);
+
+  // 直接调用 Bridge 处理逻辑
+  const result = await handleBridgeRequest(targetHost, {
+    type: messageType,
+    payload
+  });
+
+  if (!result.success) {
+    throw new Error(result.error || '请求失败');
   }
 
-  // 发送消息到 Background Service Worker
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message))
-        return
-      }
-
-      if (!response?.success) {
-        reject(new Error(response?.error || "请求失败"))
-        return
-      }
-
-      resolve(response.data)
-    })
-  })
+  return result.data;
 }
 
 /**
@@ -81,10 +69,11 @@ export async function bridgeRequestWithRetry(
       shouldRetry: (error) => {
         // 网络错误和超时错误可以重试
         return (
-          error.message.includes("请求超时") ||
-          error.message.includes("未找到") ||
-          error.message.includes("Connection")
-        )
+          error.message.includes('请求超时') ||
+          error.message.includes('未找到') ||
+          error.message.includes('Connection') ||
+          error.message.includes('未就绪')
+        );
       }
     }
   )

@@ -9,37 +9,47 @@
 // ============================================
 
 /**
- * 已下架商品记录
+ * 按原因分组的 SKC 列表
+ */
+export interface ReasonGroup {
+  reason: string;      // 下架原因
+  skcIds: string[];    // 该原因下的所有 SKC ID
+}
+
+/**
+ * 已下架商品记录（方案B：每个店铺每天一条记录）
+ *
+ * 主键：mallId + unPublishedDate
+ * 同一店铺同一天只存储一条，相同原因的 SKC 归纳在一起
  */
 export interface UnpublishedItem {
   // 唯一键字段
-  mallId: string // 店铺 ID
-  goodsSkuId: string // SKU ID
-  unPublishedTime: number // 下架时间戳
+  mallId: string;             // 店铺 ID
+  unPublishedDate: string;    // 下架日期 "YYYY-MM-DD"
 
   // 数据字段
-  skcId: string // SKC ID
-  goodsName: string // 商品名称
-  goodsMainImage: string // 商品主图
-  unPublishedReason: string // 下架原因
-  createdAt: number // 记录创建时间
-  pushed: boolean // 是否已推送钉钉
+  mallName: string;           // 店铺名称
+  reasonGroups: ReasonGroup[]; // 按原因分组的 SKC 列表
+  totalCount: number;         // SKC 总数
+  pushed: boolean;            // 是否已推送钉钉
 }
 
 /**
  * 站点异常记录
+ *
+ * 主键：mallId + skcId（同一店铺同一 SKC 只保留一条，更新时覆盖）
  */
 export interface SiteErrorItem {
   // 唯一键字段
-  mallId: string // 店铺 ID
-  skcId: string // SKC ID
-  checkedAt: number // 检查时间戳
+  mallId: string;           // 店铺 ID
+  skcId: string;            // SKC ID
 
   // 数据字段
-  mallName: string // 店铺名称
-  goodsSkuId: string // SKU ID
-  errorReasons: string[] // 异常原因列表
-  affectedSites: string[] // 涉及的站点国家列表
+  mallName: string;         // 店铺名称
+  goodsSkuId: string;       // SKU ID
+  errorReasons: string[];   // 异常原因列表
+  affectedSites: string[];  // 涉及的站点国家列表
+  checkedAt: number;        // 检查时间戳（更新时间）
 }
 
 /**
@@ -67,12 +77,32 @@ export interface ApiCache {
 // ============================================
 
 /**
+ * 推送渠道类型
+ */
+export type NotifyChannel = 'dingtalk' | 'feishu' | 'both' | 'none';
+
+/**
  * 用户配置
  */
 export interface UserConfig {
-  dingtalk_webhook?: string // 钉钉 Webhook URL
-  sync_interval?: number // 同步间隔（分钟）
-  enabled?: boolean // 是否启用自动同步
+  // 钉钉配置
+  dingtalk_webhook?: string;  // 钉钉 Webhook URL
+
+  // 飞书配置
+  feishu_app_id?: string;     // 飞书 App ID
+  feishu_app_secret?: string; // 飞书 App Secret
+  feishu_chat_id?: string;    // 飞书群聊 ID
+
+  // 推送渠道选择
+  notify_channel?: NotifyChannel;  // 推送渠道，默认 'dingtalk'
+
+  // 定时推送配置
+  push_time?: string;         // 定时推送时间，格式 "HH:MM"，如 "09:00"
+  push_enabled?: boolean;     // 是否启用定时推送
+
+  // 其他配置
+  sync_interval?: number;     // 同步间隔（分钟）
+  enabled?: boolean;          // 是否启用自动同步
 }
 
 /**
@@ -98,15 +128,23 @@ export interface TaskLog {
  * 任务状态数据
  */
 export interface TaskState {
-  status: TaskStatus
-  progress: number // 0-100
-  currentMall?: string // 当前处理的店铺
-  totalMalls: number // 总店铺数
-  completedMalls: number // 已完成店铺数
-  startTime?: number // 开始时间戳
-  endTime?: number // 结束时间戳
-  error?: string // 错误信息
-  logs: TaskLog[] // 日志数组
+  status: TaskStatus;
+  progress: number;          // 0-100
+  currentMall?: string;      // 当前处理的店铺
+  totalMalls: number;        // 总店铺数
+  completedMalls: number;    // 已完成店铺数
+  startTime?: number;        // 开始时间戳
+  endTime?: number;          // 结束时间戳
+  error?: string;            // 错误信息
+  logs: TaskLog[];           // 日志数组
+  shouldStop?: boolean;      // 停止标志
+  fetchedData?: Array<{              // 拉取的数据（用于展示）
+    mallId: string;
+    mallName: string;
+    skcId: string;
+    unPublishedTime: number;
+    unPublishedReason: string;
+  }>;
 }
 
 // ============================================
@@ -125,12 +163,27 @@ export interface PushedRecords {
 // ============================================
 
 export const CONFIG_KEYS = {
-  DINGTALK_WEBHOOK: "dingtalk_webhook",
-  SYNC_INTERVAL: "sync_interval",
-  ENABLED: "enabled",
-  TASK_STATE: "task_state",
-  PUSHED_RECORDS: "pushed_records"
-} as const
+  // 钉钉配置
+  DINGTALK_WEBHOOK: 'dingtalk_webhook',
+
+  // 飞书配置
+  FEISHU_APP_ID: 'feishu_app_id',
+  FEISHU_APP_SECRET: 'feishu_app_secret',
+  FEISHU_CHAT_ID: 'feishu_chat_id',
+
+  // 推送渠道
+  NOTIFY_CHANNEL: 'notify_channel',
+
+  // 定时推送
+  PUSH_TIME: 'push_time',
+  PUSH_ENABLED: 'push_enabled',
+
+  // 其他配置
+  SYNC_INTERVAL: 'sync_interval',
+  ENABLED: 'enabled',
+  TASK_STATE: 'task_state',
+  PUSHED_RECORDS: 'pushed_records'
+} as const;
 
 // ============================================
 // IndexedDB 表名常量

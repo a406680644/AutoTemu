@@ -139,6 +139,93 @@ ${detailLines.join("\n")}
       }
     }
   }
+
+  /**
+   * 构建聚合的已下架商品通知卡片（多店铺汇总为一条消息）
+   *
+   * Plan B 数据结构：Map<mallId, Map<date, UnpublishedItem>>
+   * UnpublishedItem: { mallName, reasonGroups: [{reason, skcIds}], totalCount }
+   *
+   * @param recordsByMallDate Map<mallId, Map<date, UnpublishedItem>>
+   */
+  buildAggregatedUnpublishedCard(
+    recordsByMallDate: Map<string, Map<string, {
+      mallName: string;
+      reasonGroups: Array<{ reason: string; skcIds: string[] }>;
+      totalCount: number;
+    }>>
+  ): DingtalkCardMessage {
+    const today = new Date().toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+
+    const mallCount = recordsByMallDate.size;
+    let totalSkcCount = 0;
+
+    // 按店铺构建内容
+    const mallSections: string[] = [];
+
+    for (const [mallId, dateMap] of recordsByMallDate) {
+      if (dateMap.size === 0) continue;
+
+      // 合并所有日期的数据
+      let mallName = mallId;
+      const mergedReasonGroups = new Map<string, string[]>();
+
+      for (const [, record] of dateMap) {
+        mallName = record.mallName || mallId;
+        totalSkcCount += record.totalCount;
+
+        // 合并 reasonGroups
+        for (const group of record.reasonGroups) {
+          const existing = mergedReasonGroups.get(group.reason);
+          if (existing) {
+            existing.push(...group.skcIds);
+          } else {
+            mergedReasonGroups.set(group.reason, [...group.skcIds]);
+          }
+        }
+      }
+
+      // 构建该店铺的内容
+      const reasonLines: string[] = [];
+      for (const [reason, skcIds] of mergedReasonGroups) {
+        // 最多显示 10 个 SKC，超过则省略
+        const displayIds = skcIds.slice(0, 10).join('、');
+        const suffix = skcIds.length > 10 ? `...等${skcIds.length}个` : '';
+        reasonLines.push(`🔴 SKC: ${displayIds}${suffix} - ${reason}`);
+      }
+
+      mallSections.push(`**【${mallName}】**\n${reasonLines.join('\n')}`);
+    }
+
+    // 构建完整的 Markdown 内容
+    const text = `
+### 【已下架商品预警汇总】
+
+📅 数据日期: ${today}
+📊 涉及店铺: ${mallCount} 个
+📦 新增 SKC: ${totalSkcCount} 个
+
+──────────────────────────────
+
+${mallSections.join('\n\n')}
+
+──────────────────────────────
+
+[查看商品管理](https://agentseller.temu.com/goods/offlineList) | 推送时间: ${new Date().toLocaleTimeString('zh-CN')}
+    `.trim();
+
+    return {
+      msgtype: 'markdown',
+      markdown: {
+        title: `【已下架预警】${mallCount}个店铺 ${totalSkcCount}条新记录`,
+        text
+      }
+    };
+  }
 }
 
 // 导出单例
