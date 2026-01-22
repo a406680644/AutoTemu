@@ -1,11 +1,10 @@
 /**
- * Runner 页面重定向
- *
- * 保留此文件用于向后兼容
- * 自动重定向到新的主应用页面
+ * Runner 页面 - RPA 任务执行和监控
  */
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
+import { sendToBackground } from "@plasmohq/messaging"
+import type { TaskType, TaskStatus } from "~types/task"
 
 // 样式常量
 const styles = {

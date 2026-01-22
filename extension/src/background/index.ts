@@ -15,8 +15,6 @@ import { runScheduledPush } from "./tasks/scheduled-push";
 import { closeCreatedTab } from "~lib/api/bridge-handler";
 import { config } from "~lib/storage/config";
 
-import { runUnpublishedMonitor } from "./tasks/unpublished-monitor"
-
 console.log("[SW] Service Worker 加载成功")
 
 // ============================================
@@ -276,13 +274,13 @@ self.addEventListener('error', (event) => {
 
 self.addEventListener("unhandledrejection", (event) => {
   console.error("[SW] 未处理的 Promise 拒绝:", event.reason)
-})
+});
 
 // ============================================
 // 初始化
 // ============================================
 
-(async () => {
+;(async () => {
   try {
     await db.init()
     console.log("[SW] 数据库初始化成功")

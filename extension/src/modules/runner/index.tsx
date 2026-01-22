@@ -3,9 +3,10 @@
  *
  * RPA 友好设计：
  * - 大按钮，易于自动化点击
- * - 明确的元素 ID（rpa-run-button, rpa-log-output, rpa-download-button）
+ * - 明确的元素 ID（rpa-run-button, rpa-stop-button, rpa-log-output, rpa-download-button）
  * - 清晰的状态显示（data-status 属性）
  * - 实时进度更新
+ * - 数据预览表格
  */
 
 import { useEffect, useState } from "react"
@@ -112,6 +113,18 @@ const styles = {
     marginBottom: spacing.xl,
     transition: `background-color ${transitions.normal}`
   }),
+  stopButton: {
+    width: "100%",
+    padding: spacing.lg,
+    fontSize: typography.sizes.xxl,
+    fontWeight: typography.weights.bold,
+    border: "none",
+    borderRadius: borderRadius.lg,
+    cursor: "pointer",
+    backgroundColor: "#dc2626",
+    color: colors.white,
+    marginBottom: spacing.xl
+  },
   progressContainer: {
     marginBottom: spacing.sm
   },
@@ -204,6 +217,32 @@ const styles = {
     color: colors.white,
     marginBottom: spacing.xl
   },
+  dataTable: {
+    width: "100%",
+    borderCollapse: "collapse" as const,
+    fontSize: typography.sizes.sm
+  },
+  tableHeader: {
+    backgroundColor: colors.gray[100],
+    padding: "10px 8px",
+    textAlign: "left" as const,
+    borderBottom: `2px solid ${colors.gray[200]}`,
+    fontWeight: typography.weights.semibold
+  },
+  tableCell: {
+    padding: "8px",
+    borderBottom: `1px solid ${colors.gray[200]}`,
+    maxWidth: 200,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap" as const
+  },
+  dataContainer: {
+    maxHeight: 400,
+    overflowY: "auto" as const,
+    border: `1px solid ${colors.gray[200]}`,
+    borderRadius: borderRadius.md
+  },
   helpCard: {
     backgroundColor: colors.info.bg,
     border: `1px solid ${colors.info.border}`,
@@ -232,6 +271,11 @@ const styles = {
     padding: "2px 6px",
     borderRadius: borderRadius.sm,
     fontFamily: typography.monoFamily
+  },
+  hint: {
+    marginTop: spacing.md,
+    fontSize: typography.sizes.sm,
+    color: colors.gray[500]
   }
 }
 
@@ -251,17 +295,20 @@ export default function RunnerModule(_props: ModuleProps) {
   const [completedMalls, setCompletedMalls] = useState(0)
   const [logs, setLogs] = useState<string[]>([])
   const [error, setError] = useState<string>()
+  const [fetchedData, setFetchedData] = useState<any[]>([])
 
   // 轮询任务状态
   useEffect(() => {
+    // 页面加载时立即获取一次状态
+    updateStatus()
+
     const interval = setInterval(async () => {
-      if (status === "running") {
-        await updateStatus()
-      }
+      // 运行中时持续轮询，其他状态也定期检查
+      await updateStatus()
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [status])
+  }, [])
 
   // 更新任务状态
   async function updateStatus() {
@@ -293,8 +340,30 @@ export default function RunnerModule(_props: ModuleProps) {
         }
       )
       setLogs(logMessages)
+
+      // 更新拉取的数据
+      const dataArray = Array.isArray(response.fetchedData)
+        ? response.fetchedData
+        : []
+      setFetchedData(dataArray)
     } catch (error) {
       console.error("更新状态失败:", error)
+    }
+  }
+
+  // 停止任务
+  async function handleStopTask() {
+    try {
+      const response = await sendToBackground({
+        name: "stop-task",
+        body: {}
+      })
+
+      if (!response?.success) {
+        setError(response?.error || "停止任务失败")
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -303,25 +372,33 @@ export default function RunnerModule(_props: ModuleProps) {
     try {
       setError(undefined)
       setLogs([])
+      setFetchedData([]) // 清空之前的数据
+      setStatus("running") // 立即设置为运行中
+      setProgress(0)
+      setCompletedMalls(0)
+      setTotalMalls(0)
 
       const response = await sendToBackground({
         name: "run-task",
         body: {
           taskType,
-          mallIds: undefined // 所有店铺
+          mallIds: undefined, // 所有店铺
+          skipPush: true // 仅采集，推送由定时任务负责
         }
       })
 
       if (!response?.success) {
         setError(response?.error || "任务启动失败")
+        setStatus("idle") // 失败时恢复为 idle
         return
       }
 
-      // 开始轮询状态
-      setStatus("running")
+      // 任务启动成功，等待一小段时间让后台开始执行
+      await new Promise((resolve) => setTimeout(resolve, 500))
       await updateStatus()
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error))
+      setStatus("idle")
     }
   }
 
@@ -399,6 +476,7 @@ export default function RunnerModule(_props: ModuleProps) {
               <span>站点异常导出</span>
             </label>
           </div>
+          <div style={styles.hint}>下架监控仅采集数据，推送由定时任务统一处理</div>
         </div>
 
         {/* 运行按钮 */}
@@ -420,6 +498,23 @@ export default function RunnerModule(_props: ModuleProps) {
           }}>
           {currentStatus === "running" ? "任务运行中..." : "运行任务"}
         </button>
+
+        {/* 停止按钮（仅在运行中显示） */}
+        {currentStatus === "running" && (
+          <button
+            id="rpa-stop-button"
+            data-testid="stop-task"
+            onClick={handleStopTask}
+            style={styles.stopButton}
+            onMouseOver={(e) =>
+              (e.currentTarget.style.backgroundColor = "#b91c1c")
+            }
+            onMouseOut={(e) =>
+              (e.currentTarget.style.backgroundColor = "#dc2626")
+            }>
+            停止任务
+          </button>
+        )}
 
         {/* 进度条 */}
         {currentStatus === "running" && (
@@ -447,10 +542,7 @@ export default function RunnerModule(_props: ModuleProps) {
         {error && (
           <div style={styles.errorBox}>
             <div style={styles.errorHeader}>
-              <svg
-                style={styles.errorIcon}
-                fill="currentColor"
-                viewBox="0 0 20 20">
+              <svg style={styles.errorIcon} fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
                   d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -481,6 +573,54 @@ export default function RunnerModule(_props: ModuleProps) {
           </div>
         </div>
 
+        {/* 数据展示（拉取到的数据预览） */}
+        {fetchedData.length > 0 && (
+          <div style={styles.card}>
+            <h2 style={styles.cardTitle}>
+              拉取数据预览 (共 {fetchedData.length} 条)
+            </h2>
+            <div style={styles.dataContainer}>
+              <table style={styles.dataTable}>
+                <thead>
+                  <tr>
+                    <th style={styles.tableHeader}>店铺</th>
+                    <th style={styles.tableHeader}>SKC ID</th>
+                    <th style={styles.tableHeader}>商品名称</th>
+                    <th style={styles.tableHeader}>下架原因</th>
+                    <th style={styles.tableHeader}>下架时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fetchedData.slice(0, 100).map((item, index) => (
+                    <tr key={index}>
+                      <td style={styles.tableCell}>{item.mallName || "-"}</td>
+                      <td style={styles.tableCell}>{item.skcId || "-"}</td>
+                      <td style={styles.tableCell} title={item.goodsName}>
+                        {item.goodsName || "-"}
+                      </td>
+                      <td
+                        style={styles.tableCell}
+                        title={item.unPublishedReason}>
+                        {item.unPublishedReason || "-"}
+                      </td>
+                      <td style={styles.tableCell}>
+                        {item.unPublishedTime
+                          ? new Date(item.unPublishedTime).toLocaleString()
+                          : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {fetchedData.length > 100 && (
+              <div style={styles.hint}>
+                仅显示前 100 条，共 {fetchedData.length} 条数据
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 下载按钮（仅站点异常任务完成后显示） */}
         {currentStatus === "done" && taskType === "site-error" && (
           <button
@@ -505,6 +645,10 @@ export default function RunnerModule(_props: ModuleProps) {
             <li style={styles.helpItem}>
               • 可通过 <code style={styles.code}>#rpa-run-button</code>{" "}
               定位运行按钮
+            </li>
+            <li style={styles.helpItem}>
+              • 可通过 <code style={styles.code}>#rpa-stop-button</code>{" "}
+              定位停止按钮（运行中显示）
             </li>
             <li style={styles.helpItem}>
               • 可通过 <code style={styles.code}>[data-status]</code>{" "}
