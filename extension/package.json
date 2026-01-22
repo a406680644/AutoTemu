@@ -33,7 +33,9 @@
   },
   "manifest": {
     "host_permissions": [
-      "https://agentseller.temu.com/*"
+      "https://agentseller.temu.com/*",
+      "https://*.erp321.com/*",
+      "https://open.yishulink.com/*"
     ],
     "permissions": [
       "alarms",

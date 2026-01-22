@@ -154,6 +154,19 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // ============================================
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // 跳过 Plasmo messaging 格式的消息（由 Plasmo 的 handler 处理）
+  // Plasmo 消息格式: { name: "handler-name", body: {...} }
+  if (message.name && typeof message.body !== "undefined") {
+    // 不处理，让 Plasmo messaging handler 处理
+    return false
+  }
+
+  // 只处理有 type 字段的自定义消息
+  if (!message.type) {
+    // 未知格式，不处理，让其他 handler 处理
+    return false
+  }
+
   console.log(
     "[SW] 收到消息:",
     message.type,
@@ -183,10 +196,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break
 
         default:
-          sendResponse({
-            success: false,
-            error: "未知的消息类型: " + message.type
-          })
+          // 未知类型，不响应（可能是其他 handler 处理的消息）
+          // 不调用 sendResponse，让消息通道自然关闭
+          return
       }
     } catch (error) {
       console.error("[SW] 处理消息失败:", error)
