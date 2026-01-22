@@ -35,9 +35,11 @@ let observer: MutationObserver | null = null
 // ============================================
 
 const STYLES = {
+  // 主显示区域样式（右浮动）
   container: `
     display: inline-flex;
     align-items: center;
+    float: right;
     margin-left: 8px;
     padding: 2px 6px;
     border-radius: 4px;
@@ -49,6 +51,7 @@ const STYLES = {
   loading: `
     display: inline-flex;
     align-items: center;
+    float: right;
     margin-left: 8px;
     padding: 2px 6px;
     border-radius: 4px;
@@ -58,6 +61,41 @@ const STYLES = {
     color: #999;
   `,
   error: `
+    display: inline-flex;
+    align-items: center;
+    float: right;
+    margin-left: 8px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    background-color: #fff2f0;
+    border: 1px solid #ffccc7;
+    color: #ff4d4f;
+  `,
+  // 悬浮面板样式（内联，在右侧）
+  hoverContainer: `
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    background-color: #e6f7ff;
+    border: 1px solid #91d5ff;
+    color: #1890ff;
+  `,
+  hoverLoading: `
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    background-color: #f5f5f5;
+    border: 1px solid #d9d9d9;
+    color: #999;
+  `,
+  hoverError: `
     display: inline-flex;
     align-items: center;
     margin-left: 8px;
@@ -101,12 +139,15 @@ function injectStyles(): void {
 /**
  * 创建在途数量显示元素
  * 使用 DOM API 而非 innerHTML 避免潜在 XSS 风险
+ * @param skuId SKU ID
+ * @param isHoverPanel 是否用于悬浮操作面板（使用不同样式）
  */
-function createTransitElement(skuId: string): HTMLSpanElement {
+function createTransitElement(skuId: string, isHoverPanel = false): HTMLSpanElement {
   const span = document.createElement("span")
-  span.className = "jst-transit-stock"
+  span.className = isHoverPanel ? "jst-transit-stock-hover" : "jst-transit-stock"
   span.dataset.skuId = skuId
-  span.style.cssText = STYLES.loading
+  span.dataset.hoverPanel = isHoverPanel ? "true" : "false"
+  span.style.cssText = isHoverPanel ? STYLES.hoverLoading : STYLES.loading
 
   const label = document.createElement("span")
   label.style.marginRight = "4px"
@@ -132,13 +173,15 @@ function updateTransitElement(
   const valueSpan = element.querySelector(".jst-transit-value")
   if (!valueSpan) return
 
+  const isHoverPanel = element.dataset.hoverPanel === "true"
+
   if (error) {
-    element.style.cssText = STYLES.error
+    element.style.cssText = isHoverPanel ? STYLES.hoverError : STYLES.error
     valueSpan.textContent = "错误"
     valueSpan.removeAttribute("style")
     element.title = error
   } else {
-    element.style.cssText = STYLES.container
+    element.style.cssText = isHoverPanel ? STYLES.hoverContainer : STYLES.container
     valueSpan.textContent = String(qty ?? 0)
     valueSpan.removeAttribute("style")
     element.title = `在途数量: ${qty ?? 0}`
@@ -194,17 +237,35 @@ async function handleItemRow(row: Element): Promise<void> {
     return
   }
 
-  // 查找插入位置 (.properties_value 元素)
-  const insertTarget = row.querySelector(".properties_value")
-  if (!insertTarget) {
-    console.warn("[JST-Stock] 商品行未找到 .properties_value，跳过:", skuId)
-    return
+  // 创建在途显示元素（主显示位置）
+  const transitElement = createTransitElement(skuId, false)
+  // 创建在途显示元素（悬浮操作面板位置，使用不同样式）
+  const transitElementHover = createTransitElement(skuId, true)
+
+  // 直接从行中查找 .stock 元素（可配货库存）
+  const stockElement = row.querySelector(".stock")
+  if (stockElement) {
+    // 插入到 stock 元素后面
+    stockElement.after(transitElement)
+    console.log("[JST-Stock] 已为SKU插入在途显示:", skuId)
+  } else {
+    // 回退：插入到 .properties_value 末尾
+    const propertiesValue = row.querySelector(".properties_value")
+    if (!propertiesValue) {
+      console.warn("[JST-Stock] 商品行未找到插入位置，跳过:", skuId)
+      return
+    }
+    propertiesValue.appendChild(transitElement)
+    console.log("[JST-Stock] 已为SKU插入在途显示(回退模式):", skuId)
   }
 
-  // 创建并插入显示元素
-  const transitElement = createTransitElement(skuId)
-  insertTarget.appendChild(transitElement)
-  console.log("[JST-Stock] 已为SKU插入在途显示:", skuId)
+  // 在悬浮操作面板中也插入在途元素
+  const operPanel = row.querySelector(".oper.m")
+  if (operPanel) {
+    // 插入到操作面板末尾（最右侧）
+    operPanel.appendChild(transitElementHover)
+    console.log("[JST-Stock] 已为SKU插入悬浮面板在途显示:", skuId)
+  }
 
   // 调用API查询
   try {
@@ -218,14 +279,17 @@ async function handleItemRow(row: Element): Promise<void> {
 
     if (response.success) {
       updateTransitElement(transitElement, response.onthewayQty ?? 0)
+      updateTransitElement(transitElementHover, response.onthewayQty ?? 0)
       console.log("[JST-Stock] 查询成功:", skuId, "=>", response.onthewayQty)
     } else {
       updateTransitElement(transitElement, null, response.error)
+      updateTransitElement(transitElementHover, null, response.error)
       console.error("[JST-Stock] 查询失败:", skuId, response.error)
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
     updateTransitElement(transitElement, null, errorMsg)
+    updateTransitElement(transitElementHover, null, errorMsg)
     console.error("[JST-Stock] API调用失败:", skuId, error)
   }
 }
