@@ -17,10 +17,11 @@ import type { NotifyChannel, UserConfig } from '~types/storage';
 // 样式常量
 const styles = {
   page: {
-    minHeight: '100vh',
-    backgroundColor: '#f9fafb',
-    padding: '32px 16px',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    minHeight: "100vh",
+    backgroundColor: "#f9fafb",
+    padding: "32px 16px",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
   },
   container: {
     maxWidth: 700,
@@ -33,7 +34,7 @@ const styles = {
   title: {
     fontSize: 28,
     fontWeight: 700,
-    color: '#1f2937',
+    color: "#1f2937",
     margin: 0
   },
   subtitle: {
@@ -42,8 +43,8 @@ const styles = {
     color: '#6b7280'
   },
   card: {
-    backgroundColor: 'white',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    backgroundColor: "white",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
     borderRadius: 8,
     padding: 24,
     marginBottom: 24
@@ -62,7 +63,7 @@ const styles = {
     marginBottom: 20
   },
   label: {
-    display: 'block',
+    display: "block",
     fontSize: 14,
     fontWeight: 500,
     color: '#374151',
@@ -221,8 +222,8 @@ export default function OptionsPage() {
 
   // 加载配置
   useEffect(() => {
-    loadConfig();
-  }, []);
+    loadConfig()
+  }, [])
 
   async function loadConfig() {
     try {
@@ -240,7 +241,7 @@ export default function OptionsPage() {
       console.error('加载配置失败:', error);
       setMessage({ type: 'error', text: '加载配置失败' });
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
@@ -547,5 +548,5 @@ export default function OptionsPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -17,12 +17,12 @@ import { withRetry, withTimeout } from '~lib/utils/retry';
  */
 export async function bridgeRequest(
   targetHost: string,
-  messageType: string = 'bridge-fetch',
+  messageType: string = "bridge-fetch",
   payload: {
-    url: string;
-    method?: string;
-    data?: any;
-    headers?: Record<string, string>;
+    url: string
+    method?: string
+    data?: any
+    headers?: Record<string, string>
   }
 ): Promise<BridgeResponse> {
   console.log('[API Client] 请求:', payload.url);
@@ -45,24 +45,24 @@ export async function bridgeRequest(
  */
 export async function bridgeRequestWithRetry(
   targetHost: string,
-  messageType: string = 'bridge-fetch',
+  messageType: string = "bridge-fetch",
   payload: {
-    url: string;
-    method?: string;
-    data?: any;
-    headers?: Record<string, string>;
+    url: string
+    method?: string
+    data?: any
+    headers?: Record<string, string>
   },
   options?: {
-    maxRetries?: number;
-    timeout?: number;
+    maxRetries?: number
+    timeout?: number
   }
 ): Promise<BridgeResponse> {
-  const { maxRetries = 3, timeout = 30000 } = options || {};
+  const { maxRetries = 3, timeout = 30000 } = options || {}
 
   return withRetry(
     async () => {
-      const promise = bridgeRequest(targetHost, messageType, payload);
-      return withTimeout(promise, timeout, '请求超时');
+      const promise = bridgeRequest(targetHost, messageType, payload)
+      return withTimeout(promise, timeout, "请求超时")
     },
     {
       maxRetries,
@@ -76,5 +76,5 @@ export async function bridgeRequestWithRetry(
         );
       }
     }
-  );
+  )
 }

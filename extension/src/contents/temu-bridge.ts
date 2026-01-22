@@ -9,14 +9,14 @@
  * - fetch 异步响应
  */
 
-import type { PlasmoCSConfig } from "plasmo";
+import type { PlasmoCSConfig } from "plasmo"
 
 // Plasmo Content Script 配置
 export const config: PlasmoCSConfig = {
   matches: ["https://agentseller.temu.com/*"],
   run_at: "document_end",
   all_frames: false
-};
+}
 
 console.log('[Bridge] Content Script 加载成功');
 console.log('[Bridge] 当前域名:', location.host);
@@ -39,8 +39,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           ok: true,
           host: location.host,
           url: location.href
-        });
-        return;
+        })
+        return
       }
 
       // 处理 fetch 请求
@@ -75,7 +75,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         error: e instanceof Error ? e.message : String(e)
       });
     }
-  })();
+  })()
 
   return true; // 关键：保持消息通道开放以支持异步响应
 });
@@ -89,17 +89,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
  * 在页面上下文中发送请求，自动携带 Cookie
  */
 async function handleBridgeFetch(payload: {
-  url: string;
-  method?: string;
-  data?: any;
-  headers?: Record<string, string>;
+  url: string
+  method?: string
+  data?: any
+  headers?: Record<string, string>
 }): Promise<{
-  ok: boolean;
-  status?: number;
-  data?: any;
-  error?: string;
+  ok: boolean
+  status?: number
+  data?: any
+  error?: string
 }> {
-  const { url, method = 'POST', data, headers = {} } = payload;
+  const { url, method = "POST", data, headers = {} } = payload
 
   try {
     // 构建请求头（参考项目模式）
@@ -123,13 +123,13 @@ async function handleBridgeFetch(payload: {
     });
 
     // 解析响应
-    const contentType = response.headers.get('content-type');
-    let responseData: any;
+    const contentType = response.headers.get("content-type")
+    let responseData: any
 
-    if (contentType?.includes('application/json')) {
-      responseData = await response.json();
+    if (contentType?.includes("application/json")) {
+      responseData = await response.json()
     } else {
-      responseData = await response.text();
+      responseData = await response.text()
     }
 
     console.log('[Bridge] 请求成功:', response.status);
@@ -138,13 +138,13 @@ async function handleBridgeFetch(payload: {
       ok: response.ok,
       status: response.status,
       data: responseData
-    };
+    }
   } catch (error) {
-    console.error('[Bridge] 请求失败:', error);
+    console.error("[Bridge] 请求失败:", error)
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error)
-    };
+    }
   }
 }
 

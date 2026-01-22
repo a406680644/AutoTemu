@@ -29,9 +29,9 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
     if (!taskType || !['unpublished', 'site-error'].includes(taskType)) {
       res.send({
         success: false,
-        error: '无效的任务类型'
-      });
-      return;
+        error: "无效的任务类型"
+      })
+      return
     }
 
     // 2. 前置检查：确保 Bridge 就绪（会自动创建标签页如果不存在）
@@ -67,9 +67,9 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
 
         res.send({
           success: true,
-          taskId: 'unpublished-' + Date.now()
-        });
-        break;
+          taskId: "unpublished-" + Date.now()
+        })
+        break
 
       case 'site-error':
         console.log('[run-task] 启动站点异常导出任务');
@@ -87,23 +87,23 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
 
         res.send({
           success: true,
-          taskId: 'site-error-' + Date.now()
-        });
-        break;
+          taskId: "site-error-" + Date.now()
+        })
+        break
 
       default:
         res.send({
           success: false,
-          error: '未知的任务类型'
-        });
+          error: "未知的任务类型"
+        })
     }
   } catch (error) {
     console.error('[run-task] 执行失败:', error);
     res.send({
       success: false,
       error: error instanceof Error ? error.message : String(error)
-    });
+    })
   }
-};
+}
 
-export default handler;
+export default handler

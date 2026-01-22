@@ -455,22 +455,22 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
     await taskState.clearStopFlag();
 
     // 步骤 1: 获取店铺列表
-    await taskState.addLog('info', '获取店铺列表...');
-    let malls = await temuApi.getMallList();
+    await taskState.addLog("info", "获取店铺列表...")
+    let malls = await temuApi.getMallList()
 
     if (!malls || malls.length === 0) {
-      throw new Error('未找到任何店铺，请先登录 Temu 卖家中心');
+      throw new Error("未找到任何店铺，请先登录 Temu 卖家中心")
     }
 
     if (mallIds && mallIds.length > 0) {
-      malls = malls.filter(mall => mallIds.includes(mall.mallId));
+      malls = malls.filter((mall) => mallIds.includes(mall.mallId))
       if (malls.length === 0) {
-        throw new Error('指定的店铺 ID 不存在');
+        throw new Error("指定的店铺 ID 不存在")
       }
     }
 
-    await taskState.addLog('info', `获取到 ${malls.length} 个店铺`);
-    await taskState.start(malls.length);
+    await taskState.addLog("info", `获取到 ${malls.length} 个店铺`)
+    await taskState.start(malls.length)
 
     let totalErrors = 0;
 
@@ -482,8 +482,11 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
       const mallName = mall.mallName;
       const mallId = mall.mallId;
 
-      await taskState.addLog('info', `[${i + 1}/${malls.length}] 处理店铺: ${mallName}`);
-      await taskState.updateProgress(i, mallName);
+      await taskState.addLog(
+        "info",
+        `[${i + 1}/${malls.length}] 处理店铺: ${mallName}`
+      )
+      await taskState.updateProgress(i, mallName)
 
       try {
         // ⭐ 流水线并发：拉取数据和查询异常并行执行
@@ -543,21 +546,20 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
 
         // 保存到 IndexedDB
         if (mallErrors.length > 0) {
-          await db.putBatch('site_errors', mallErrors);
-          totalErrors += mallErrors.length;
+          await db.putBatch("site_errors", mallErrors)
+          totalErrors += mallErrors.length
           await taskState.addLog(
-            'info',
+            "info",
             `店铺 ${mallName}: 发现 ${mallErrors.length} 条站点异常记录`
-          );
+          )
         } else {
-          await taskState.addLog('info', `店铺 ${mallName}: 无站点异常`);
+          await taskState.addLog("info", `店铺 ${mallName}: 无站点异常`)
         }
-
       } catch (error) {
         await taskState.addLog(
-          'error',
+          "error",
           `店铺 ${mallName} 处理失败: ${error instanceof Error ? error.message : String(error)}`
-        );
+        )
       }
 
       // 店铺间等待
@@ -568,16 +570,21 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
     }
 
     // 任务完成
-    await taskState.updateProgress(malls.length);
-    await taskState.complete();
-    await taskState.addLog('info', `站点异常同步任务完成，共发现 ${totalErrors} 条异常`);
-    console.log('[站点异常] 任务执行完成');
-
+    await taskState.updateProgress(malls.length)
+    await taskState.complete()
+    await taskState.addLog(
+      "info",
+      `站点异常同步任务完成，共发现 ${totalErrors} 条异常`
+    )
+    console.log("[站点异常] 任务执行完成")
   } catch (error) {
-    console.error('[站点异常] 任务执行失败:', error);
-    await taskState.fail(error instanceof Error ? error.message : String(error));
-    await taskState.addLog('error', `任务失败: ${error instanceof Error ? error.message : String(error)}`);
-    throw error;
+    console.error("[站点异常] 任务执行失败:", error)
+    await taskState.fail(error instanceof Error ? error.message : String(error))
+    await taskState.addLog(
+      "error",
+      `任务失败: ${error instanceof Error ? error.message : String(error)}`
+    )
+    throw error
   }
 }
 
@@ -589,25 +596,31 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
  */
 export async function exportSiteErrorCsv(mallIds?: string[]): Promise<string> {
   // 从 IndexedDB 获取数据
-  let allErrors = await db.getAll('site_errors') as SiteErrorItem[];
+  let allErrors = (await db.getAll("site_errors")) as SiteErrorItem[]
 
   // 如果指定了店铺 ID，则过滤
   if (mallIds && mallIds.length > 0) {
-    allErrors = allErrors.filter(error => mallIds.includes(error.mallId));
+    allErrors = allErrors.filter((error) => mallIds.includes(error.mallId))
   }
 
   // 按检查时间降序排序
-  allErrors.sort((a, b) => b.checkedAt - a.checkedAt);
+  allErrors.sort((a, b) => b.checkedAt - a.checkedAt)
 
   // 构建 CSV 行
-  const headers = ['店铺名称', 'SKC', '站点异常原因', '涉及站点国家', '检查时间'];
-  const rows = allErrors.map(error => ({
-    '店铺名称': error.mallName,
-    'SKC': error.skcId,
-    '站点异常原因': error.errorReasons.join('; '),
-    '涉及站点国家': error.affectedSites.join(', '),
-    '检查时间': formatTimestamp(error.checkedAt)
-  }));
+  const headers = [
+    "店铺名称",
+    "SKC",
+    "站点异常原因",
+    "涉及站点国家",
+    "检查时间"
+  ]
+  const rows = allErrors.map((error) => ({
+    店铺名称: error.mallName,
+    SKC: error.skcId,
+    站点异常原因: error.errorReasons.join("; "),
+    涉及站点国家: error.affectedSites.join(", "),
+    检查时间: formatTimestamp(error.checkedAt)
+  }))
 
-  return generateCsv(headers, rows);
+  return generateCsv(headers, rows)
 }

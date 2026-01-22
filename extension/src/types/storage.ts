@@ -56,20 +56,20 @@ export interface SiteErrorItem {
  * SKU 映射（goodsSkuId -> skcId）
  */
 export interface SkuMapping {
-  mallId: string;           // 店铺 ID
-  goodsSkuId: number;       // SKU ID
-  skcId: string;            // SKC ID
-  updatedAt: number;        // 更新时间
+  mallId: string // 店铺 ID
+  goodsSkuId: number // SKU ID
+  skcId: string // SKC ID
+  updatedAt: number // 更新时间
 }
 
 /**
  * API 缓存
  */
 export interface ApiCache {
-  key: string;              // 缓存键
-  value: any;               // 缓存值
-  expiry: number;           // 过期时间戳
-  createdAt: number;        // 创建时间
+  key: string // 缓存键
+  value: any // 缓存值
+  expiry: number // 过期时间戳
+  createdAt: number // 创建时间
 }
 
 // ============================================
@@ -108,20 +108,20 @@ export interface UserConfig {
 /**
  * 任务状态
  */
-export type TaskStatus = 'idle' | 'running' | 'done' | 'fail';
+export type TaskStatus = "idle" | "running" | "done" | "fail"
 
 /**
  * 日志级别
  */
-export type LogLevel = 'info' | 'warn' | 'error';
+export type LogLevel = "info" | "warn" | "error"
 
 /**
  * 任务日志
  */
 export interface TaskLog {
-  timestamp: number;
-  level: LogLevel;
-  message: string;
+  timestamp: number
+  level: LogLevel
+  message: string
 }
 
 /**
@@ -155,7 +155,7 @@ export interface TaskState {
  * 已推送记录标记（Set 序列化为数组）
  */
 export interface PushedRecords {
-  unpublished_keys: string[];  // 已推送的下架记录键
+  unpublished_keys: string[] // 已推送的下架记录键
 }
 
 // ============================================
@@ -190,8 +190,8 @@ export const CONFIG_KEYS = {
 // ============================================
 
 export const STORE_NAMES = {
-  UNPUBLISHED: 'unpublished',       // 已下架记录
-  SITE_ERRORS: 'site_errors',       // 站点异常
-  SKU_MAPPING: 'sku_mapping',       // SKU 映射
-  API_CACHE: 'api_cache'            // API 缓存
-} as const;
+  UNPUBLISHED: "unpublished", // 已下架记录
+  SITE_ERRORS: "site_errors", // 站点异常
+  SKU_MAPPING: "sku_mapping", // SKU 映射
+  API_CACHE: "api_cache" // API 缓存
+} as const
