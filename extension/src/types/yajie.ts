@@ -131,3 +131,52 @@ export interface YajieTransitQueryResponse {
   onthewayQty?: number
   error?: string
 }
+
+// ============================================
+// 采购单相关类型
+// ============================================
+
+/**
+ * 采购单列表请求
+ */
+export interface YajiePurchaseOrderRequest {
+  skuCode: string
+}
+
+/**
+ * 采购单商品详情（purchase_stock_list 中的项）
+ */
+export interface YajiePurchaseStockItem {
+  stock_code: string
+  purchase_quantity: number
+  purchase_price: number
+  signfor_quantity: number
+  good_quality: number
+  defective_quality: number
+  shelves_quantity: number
+  estimated_arrival_time: string
+}
+
+/**
+ * 采购单记录
+ */
+export interface YajiePurchaseOrder {
+  purchase_code: string
+  supplier_name: string
+  purchase_name: string
+  warehouse_name: string
+  remark: string
+  create_time: string
+  estimated_arrival_time: string
+  purchase_logistics_list: string[]
+  purchase_stock_list: YajiePurchaseStockItem[]
+}
+
+/**
+ * 采购单列表响应
+ */
+export interface YajiePurchaseOrderResponse {
+  success: boolean
+  orders?: YajiePurchaseOrder[]
+  error?: string
+}

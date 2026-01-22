@@ -11,6 +11,8 @@ import db from "~lib/storage/idb"
 import type {
   CachedToken,
   SignParams,
+  YajiePurchaseOrder,
+  YajiePurchaseStockItem,
   YajieStockItem,
   YajieStockResponse,
   YajieTokenResponse
@@ -31,6 +33,25 @@ const YAJIE_CONFIG = {
 const TOKEN_CACHE_KEY = "yajie_access_token"
 // Token缓存TTL（23小时，预留1小时缓冲）
 const TOKEN_TTL_MINUTES = 23 * 60
+// Token无效错误关键词
+const TOKEN_INVALID_KEYWORDS = ["token无效", "token已过期", "已过期", "无效"]
+
+/**
+ * 检测是否为Token无效错误
+ */
+function isTokenInvalidError(errorMsg: string): boolean {
+  const lowerMsg = errorMsg.toLowerCase()
+  return TOKEN_INVALID_KEYWORDS.some((keyword) => lowerMsg.includes(keyword))
+}
+
+/**
+ * 清除Token缓存
+ * 当API返回token无效错误时调用
+ */
+async function clearTokenCache(): Promise<void> {
+  await db.delete("api_cache", TOKEN_CACHE_KEY)
+  console.log("[Yajie] Token缓存已清除")
+}
 
 // ============================================
 // HMAC-SHA256 签名生成
@@ -173,10 +194,14 @@ function generateNonce(): string {
  * 查询SKU在途数量
  *
  * @param skuCode SKU编码
+ * @param retry 是否为重试请求（内部使用）
  * @returns 在途数量，未找到返回0
  */
-export async function queryTransitStock(skuCode: string): Promise<number> {
-  console.log("[Yajie] 查询在途库存:", skuCode)
+export async function queryTransitStock(
+  skuCode: string,
+  retry = false
+): Promise<number> {
+  console.log("[Yajie] 查询在途库存:", skuCode, retry ? "(重试)" : "")
 
   // 1. 获取Access Token
   const accessToken = await getAccessToken()
@@ -198,10 +223,10 @@ export async function queryTransitStock(skuCode: string): Promise<number> {
   const sign = await generateSign(signParams)
 
   // 4. 构建带 query 参数的 URL（参数在 query 中，不是 header 中）
-  // 注意：client_secret 仅用于签名计算，不应在 URL 中传输
   const queryParams = new URLSearchParams({
     access_token: accessToken,
     client_id: YAJIE_CONFIG.clientId,
+    client_secret: YAJIE_CONFIG.clientSecret,
     timestamp: timestamp.toString(),
     sign: sign,
     nonce: nonce
@@ -234,7 +259,14 @@ export async function queryTransitStock(skuCode: string): Promise<number> {
   // 亚杰 API 成功状态码是 "200" 或 200
   const isSuccess = String(data.code) === "200" || data.code === 0
   if (!isSuccess) {
-    throw new Error(`库存查询失败: ${data.msg || data.message || `code=${data.code}`}`)
+    const errorMsg = data.msg || data.message || `code=${data.code}`
+    // 检测Token无效错误，清除缓存并重试一次
+    if (!retry && isTokenInvalidError(errorMsg)) {
+      console.log("[Yajie] 检测到Token无效，清除缓存并重试")
+      await clearTokenCache()
+      return queryTransitStock(skuCode, true)
+    }
+    throw new Error(`库存查询失败: ${errorMsg}`)
   }
 
   // 6. 提取在途数量（响应中是 data.rows，字段是 stock_code）
@@ -254,12 +286,14 @@ export async function queryTransitStock(skuCode: string): Promise<number> {
  * 批量查询SKU在途数量
  *
  * @param skuCodes SKU编码列表
+ * @param retry 是否为重试请求（内部使用）
  * @returns SKU编码到在途数量的映射
  */
 export async function queryTransitStockBatch(
-  skuCodes: string[]
+  skuCodes: string[],
+  retry = false
 ): Promise<Map<string, number>> {
-  console.log("[Yajie] 批量查询在途库存:", skuCodes.length, "个SKU")
+  console.log("[Yajie] 批量查询在途库存:", skuCodes.length, "个SKU", retry ? "(重试)" : "")
 
   if (skuCodes.length === 0) {
     return new Map()
@@ -285,10 +319,10 @@ export async function queryTransitStockBatch(
   const sign = await generateSign(signParams)
 
   // 4. 构建带 query 参数的 URL
-  // 注意：client_secret 仅用于签名计算，不应在 URL 中传输
   const queryParams = new URLSearchParams({
     access_token: accessToken,
     client_id: YAJIE_CONFIG.clientId,
+    client_secret: YAJIE_CONFIG.clientSecret,
     timestamp: timestamp.toString(),
     sign: sign,
     nonce: nonce
@@ -321,7 +355,14 @@ export async function queryTransitStockBatch(
   // 亚杰 API 成功状态码是 "200" 或 200
   const isSuccess = String(data.code) === "200" || data.code === 0
   if (!isSuccess) {
-    throw new Error(`库存查询失败: ${data.msg || data.message || `code=${data.code}`}`)
+    const errorMsg = data.msg || data.message || `code=${data.code}`
+    // 检测Token无效错误，清除缓存并重试一次
+    if (!retry && isTokenInvalidError(errorMsg)) {
+      console.log("[Yajie] 检测到Token无效，清除缓存并重试")
+      await clearTokenCache()
+      return queryTransitStockBatch(skuCodes, true)
+    }
+    throw new Error(`库存查询失败: ${errorMsg}`)
   }
 
   // 6. 构建结果映射（响应中是 data.rows，字段是 stock_code）
@@ -335,4 +376,115 @@ export async function queryTransitStockBatch(
   console.log("[Yajie] 批量查询完成:", resultMap.size, "个结果")
 
   return resultMap
+}
+
+// ============================================
+// 采购单查询
+// ============================================
+
+/**
+ * 查询SKU的所有采购单
+ *
+ * @param skuCode SKU编码
+ * @param retry 是否为重试请求（内部使用）
+ * @returns 采购单列表
+ */
+export async function queryPurchaseOrders(
+  skuCode: string,
+  retry = false
+): Promise<YajiePurchaseOrder[]> {
+  console.log("[Yajie] 查询采购单:", skuCode, retry ? "(重试)" : "")
+
+  // 1. 获取Access Token
+  const accessToken = await getAccessToken()
+
+  // 2. 构建请求参数
+  const apiPath = "/api/v1/out/product_purchase_order_list"
+  const timestamp = Math.floor(Date.now() / 1000)
+  const nonce = generateNonce()
+
+  // 3. 生成签名
+  const signParams: SignParams = {
+    access_token: accessToken,
+    client_id: YAJIE_CONFIG.clientId,
+    method: "post",
+    nonce,
+    timestamp,
+    url: apiPath
+  }
+  const sign = await generateSign(signParams)
+
+  // 4. 构建带 query 参数的 URL
+  // 注意：此接口需要 client_secret 参数
+  const queryParams = new URLSearchParams({
+    access_token: accessToken,
+    client_id: YAJIE_CONFIG.clientId,
+    client_secret: YAJIE_CONFIG.clientSecret,
+    timestamp: timestamp.toString(),
+    sign: sign,
+    nonce: nonce
+  })
+  const requestUrl = `${YAJIE_CONFIG.baseUrl}${apiPath}?${queryParams.toString()}`
+
+  // 5. 发送请求（只传必填参数）
+  const response = await fetch(requestUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      page: 1,
+      pageSize: 100,
+      search_field: "stock_code",
+      search_value: skuCode
+    })
+  })
+
+  if (!response.ok) {
+    throw new Error(`采购单查询失败: ${response.status} ${response.statusText}`)
+  }
+
+  const data = await response.json()
+
+  // 亚杰 API 成功状态码是 "200" 或 200
+  const isSuccess = String(data.code) === "200" || data.code === 0
+  if (!isSuccess) {
+    const errorMsg = data.msg || data.message || `code=${data.code}`
+    // 检测Token无效错误，清除缓存并重试一次
+    if (!retry && isTokenInvalidError(errorMsg)) {
+      console.log("[Yajie] 检测到Token无效，清除缓存并重试")
+      await clearTokenCache()
+      return queryPurchaseOrders(skuCode, true)
+    }
+    throw new Error(`采购单查询失败: ${errorMsg}`)
+  }
+
+  // 6. 提取并过滤匹配该 SKU 的采购单
+  const orders: YajiePurchaseOrder[] = []
+
+  for (const row of data.data?.rows || []) {
+    // 过滤 purchase_stock_list，只保留匹配 SKU 的项
+    const matchedStockList: YajiePurchaseStockItem[] = (
+      row.purchase_stock_list || []
+    ).filter((item: YajiePurchaseStockItem) => item.stock_code === skuCode)
+
+    // 只有包含匹配 SKU 的采购单才加入结果
+    if (matchedStockList.length > 0) {
+      orders.push({
+        purchase_code: row.purchase_code || "",
+        supplier_name: row.supplier_name || "",
+        purchase_name: row.purchase_name || "",
+        warehouse_name: row.warehouse_name || "",
+        remark: row.remark || "",
+        create_time: row.create_time || "",
+        estimated_arrival_time: row.estimated_arrival_time || "",
+        purchase_logistics_list: row.purchase_logistics_list || [],
+        purchase_stock_list: matchedStockList
+      })
+    }
+  }
+
+  console.log("[Yajie] 采购单查询完成:", orders.length, "条记录")
+
+  return orders
 }
