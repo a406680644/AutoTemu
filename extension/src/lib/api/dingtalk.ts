@@ -6,6 +6,12 @@
 
 import type { DingtalkCardMessage, DingtalkWebhookResponse } from '~types/api';
 import { withRetry } from '~lib/utils/retry';
+import {
+  DINGTALK_API,
+  TEMU_API,
+  getTemuPageUrl,
+  RETRY
+} from '~lib/constants';
 
 /**
  * 钉钉 API 客户端
@@ -22,7 +28,7 @@ class DingtalkApiClient {
       console.log('[钉钉 API] 发送消息:', card.markdown.title);
 
       // 验证 Webhook URL
-      if (!webhookUrl || !webhookUrl.startsWith('https://oapi.dingtalk.com/')) {
+      if (!webhookUrl || !webhookUrl.startsWith(DINGTALK_API.WEBHOOK_PREFIX)) {
         throw new Error('无效的钉钉 Webhook URL');
       }
 
@@ -44,7 +50,7 @@ class DingtalkApiClient {
           return res.json();
         },
         {
-          maxRetries: 3,
+          maxRetries: RETRY.MAX_RETRIES,
           shouldRetry: (error) => {
             // 网络错误可以重试
             return error.message.includes('HTTP');
@@ -109,8 +115,8 @@ class DingtalkApiClient {
 
     // 构建跳转链接
     const jumpUrl = mallId
-      ? `https://agentseller.temu.com/goods/offlineList?mallId=${mallId}`
-      : 'https://agentseller.temu.com/goods/offlineList';
+      ? getTemuPageUrl(TEMU_API.PAGES.OFFLINE_LIST, { mallId })
+      : getTemuPageUrl(TEMU_API.PAGES.OFFLINE_LIST);
 
     // 构建 Markdown 内容
     const text = `
@@ -215,7 +221,7 @@ ${mallSections.join('\n\n')}
 
 ──────────────────────────────
 
-[查看商品管理](https://agentseller.temu.com/goods/offlineList) | 推送时间: ${new Date().toLocaleTimeString('zh-CN')}
+[查看商品管理](${getTemuPageUrl(TEMU_API.PAGES.OFFLINE_LIST)}) | 推送时间: ${new Date().toLocaleTimeString('zh-CN')}
     `.trim();
 
     return {

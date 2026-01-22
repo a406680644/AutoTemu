@@ -22,6 +22,7 @@ import { formatDateKey } from '~lib/storage/dedup';
 import db from '~lib/storage/idb';
 import type { UnpublishedItem, ReasonGroup } from '~types/storage';
 import { sleep } from '~lib/utils/retry';
+import { TEMU_API, DELAY } from '~lib/constants';
 
 /**
  * 将 SKC 列表按原因分组
@@ -174,12 +175,12 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
           }
 
           // 检查是否还有更多页
-          const totalPages = Math.ceil(result.total / 100);
+          const totalPages = Math.ceil(result.total / TEMU_API.PAGINATION.PAGE_SIZE);
           hasMore = pageNum < totalPages;
           pageNum++;
 
           if (hasMore) {
-            await sleep(1000);
+            await sleep(DELAY.BETWEEN_PAGES);
             // 检查停止标志（等待后）
             if (await taskState.shouldStop()) {
               await taskState.clearStopFlag();
@@ -231,9 +232,9 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
         );
       }
 
-      // 等待 2 秒后处理下一个店铺（避免风控）
+      // 等待后处理下一个店铺（避免风控）
       if (i < malls.length - 1) {
-        await sleep(2000);
+        await sleep(DELAY.BETWEEN_SHOPS);
         // 检查停止标志（店铺间等待后）
         if (await taskState.shouldStop()) {
           await taskState.clearStopFlag();

@@ -7,6 +7,13 @@
 
 import { config } from '~lib/storage/config';
 import { withRetry } from '~lib/utils/retry';
+import {
+  FEISHU_API,
+  getFeishuApiUrl,
+  TEMU_API,
+  getTemuPageUrl,
+  RETRY
+} from '~lib/constants';
 
 // ============================================
 // 类型定义
@@ -93,8 +100,8 @@ class FeishuApiClient {
    * 使用内部应用凭证获取
    */
   async getTenantAccessToken(): Promise<string> {
-    // 检查缓存的 Token 是否有效（提前 5 分钟过期）
-    if (cachedToken && Date.now() < tokenExpiry - 5 * 60 * 1000) {
+    // 检查缓存的 Token 是否有效（提前刷新，避免使用即将过期的 Token）
+    if (cachedToken && Date.now() < tokenExpiry - FEISHU_API.TOKEN.REFRESH_BUFFER) {
       return cachedToken;
     }
 
@@ -108,7 +115,7 @@ class FeishuApiClient {
     console.log('[飞书 API] 获取 Tenant Access Token...');
 
     const response = await fetch(
-      'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
+      getFeishuApiUrl(FEISHU_API.ENDPOINTS.TOKEN),
       {
         method: 'POST',
         headers: {
@@ -137,7 +144,7 @@ class FeishuApiClient {
 
     // 缓存 Token（默认 2 小时有效）
     cachedToken = data.tenant_access_token;
-    tokenExpiry = Date.now() + (data.expire || 7200) * 1000;
+    tokenExpiry = Date.now() + (data.expire || FEISHU_API.TOKEN.DEFAULT_EXPIRE) * 1000;
 
     console.log('[飞书 API] Token 获取成功，有效期:', data.expire, '秒');
     return cachedToken;
@@ -158,7 +165,7 @@ class FeishuApiClient {
       const response = await withRetry(
         async () => {
           const res = await fetch(
-            `https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id`,
+            `${getFeishuApiUrl(FEISHU_API.ENDPOINTS.MESSAGES)}?receive_id_type=chat_id`,
             {
               method: 'POST',
               headers: {
@@ -180,7 +187,7 @@ class FeishuApiClient {
           return res.json();
         },
         {
-          maxRetries: 3,
+          maxRetries: RETRY.MAX_RETRIES,
           shouldRetry: (error) => {
             // Token 过期时清除缓存并重试
             if (error.message.includes('99991663') || error.message.includes('token')) {
@@ -277,7 +284,7 @@ class FeishuApiClient {
           tag: 'plain_text',
           content: `⚠️ 已下架商品预警汇总`
         },
-        template: 'red'
+        template: FEISHU_API.CARD.ALERT_COLOR
       },
       elements: [
         {
@@ -328,7 +335,7 @@ class FeishuApiClient {
                 tag: 'plain_text',
                 content: '查看商品管理'
               },
-              url: 'https://agentseller.temu.com/newon/product-select',
+              url: getTemuPageUrl(TEMU_API.PAGES.PRODUCT_SELECT),
               type: 'primary'
             }
           ]

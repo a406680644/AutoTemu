@@ -15,9 +15,11 @@ import type {
   SiteErrorQueryRequest,
   SiteErrorResponse
 } from '~types/api';
-
-// Temu 卖家中心域名
-const TEMU_HOST = 'agentseller.temu.com';
+import {
+  TEMU_API,
+  getTemuApiUrl,
+  getTemuSupplierEndpoint
+} from '~lib/constants';
 
 // 基础请求头（必须包含 Accept，否则某些 API 返回 405）
 const BASE_HEADERS = {
@@ -35,10 +37,10 @@ class TemuApiClient {
   async getMallList(): Promise<Mall[]> {
     try {
       const response = await bridgeRequestWithRetry(
-        TEMU_HOST,
+        TEMU_API.HOST,
         'bridge-fetch',
         {
-          url: 'https://agentseller.temu.com/api/seller/auth/userInfo',
+          url: getTemuApiUrl(TEMU_API.ENDPOINTS.USER_INFO),
           method: 'POST',
           data: {},
           headers: BASE_HEADERS
@@ -96,9 +98,8 @@ class TemuApiClient {
   }> {
     try {
       // 根据 managedType 选择接口
-      const apiUrl = managedType === 0
-        ? 'https://agentseller.temu.com/api/kiana/mms/robin/searchForChainSupplier'   // 全托
-        : 'https://agentseller.temu.com/api/kiana/mms/robin/searchForSemiSupplier';   // 半托
+      const endpoint = getTemuSupplierEndpoint(managedType);
+      const apiUrl = getTemuApiUrl(endpoint);
 
       // 动态计算最近两天的时间范围（本地时间整点对齐）
       // 使用 Date 构造函数明确指定本地时间，避免 Service Worker 时区问题
@@ -118,18 +119,19 @@ class TemuApiClient {
       // 构建请求载荷
       const requestPayload = {
         pageNum,
-        pageSize: 100,
-        timeType: 7,
+        pageSize: TEMU_API.PAGINATION.PAGE_SIZE,
+        timeType: TEMU_API.FILTERS.TIME_TYPE_UNPUBLISHED,
         timeBegin,
         timeEnd
       };
 
-      console.log('[Temu API] 拉取已下架数据 - 店铺:', mallId, '类型:', managedType === 0 ? '全托' : '半托', '页码:', pageNum);
+      const managedTypeLabel = managedType === TEMU_API.MANAGED_TYPE.CHAIN ? '全托' : '半托';
+      console.log('[Temu API] 拉取已下架数据 - 店铺:', mallId, '类型:', managedTypeLabel, '页码:', pageNum);
       console.log('[Temu API] 请求载荷:', JSON.stringify(requestPayload));
       console.log('[Temu API] 时间范围:', beginDate.toLocaleString(), '~', endDate.toLocaleString());
 
       const response = await bridgeRequestWithRetry(
-        TEMU_HOST,
+        TEMU_API.HOST,
         'bridge-fetch',
         {
           url: apiUrl,
@@ -213,25 +215,25 @@ class TemuApiClient {
   }> {
     try {
       // 根据 managedType 选择接口
-      const apiUrl = managedType === 0
-        ? 'https://agentseller.temu.com/api/kiana/mms/robin/searchForChainSupplier'   // 全托
-        : 'https://agentseller.temu.com/api/kiana/mms/robin/searchForSemiSupplier';   // 半托
+      const endpoint = getTemuSupplierEndpoint(managedType);
+      const apiUrl = getTemuApiUrl(endpoint);
 
-      console.log('[Temu API] 拉取已发布站点数据 - 店铺:', mallId, '类型:', managedType === 0 ? '全托' : '半托', '页码:', pageNum);
+      const managedTypeLabel = managedType === TEMU_API.MANAGED_TYPE.CHAIN ? '全托' : '半托';
+      console.log('[Temu API] 拉取已发布站点数据 - 店铺:', mallId, '类型:', managedTypeLabel, '页码:', pageNum);
 
       // 使用 Kiana 接口
       // secondarySelectStatusList: [12] 表示已上架状态
       const requestPayload = {
         pageNum,
-        pageSize: 100,
-        secondarySelectStatusList: [12],
+        pageSize: TEMU_API.PAGINATION.PAGE_SIZE,
+        secondarySelectStatusList: TEMU_API.FILTERS.PUBLISHED_STATUS,
         supplierTodoTypeList: []
       };
 
       console.log('[Temu API] 请求载荷:', JSON.stringify(requestPayload));
 
       const response = await bridgeRequestWithRetry(
-        TEMU_HOST,
+        TEMU_API.HOST,
         'bridge-fetch',
         {
           url: apiUrl,
@@ -303,10 +305,10 @@ class TemuApiClient {
       console.log('[Temu API] 请求载荷:', JSON.stringify(requestData));
 
       const response = await bridgeRequestWithRetry(
-        TEMU_HOST,
+        TEMU_API.HOST,
         'bridge-fetch',
         {
-          url: 'https://agentseller.temu.com/api/kiana/mms/robin/queryFullyOtherMessage',
+          url: getTemuApiUrl(TEMU_API.ENDPOINTS.SITE_ERRORS),
           method: 'POST',
           data: requestData,
           headers: {

@@ -16,17 +16,12 @@ import type { SiteErrorItem } from '~types/storage';
 import { sleep } from '~lib/utils/retry';
 // ⭐ 静态导入 CSV 工具（Service Worker 不支持动态 import）
 import { generateCsv, formatTimestamp } from '~lib/utils/csv';
-
-/**
- * 静态异常原因模板映射（简化版）
- * 仅对特定 checkCode 使用简化模板，替换复杂的 HTML 原因
- * ⭐ 不在此映射中的 checkCode 会使用 API 返回的 staticDescVOList 原因
- */
-const SIMPLIFIED_REASON_TEMPLATES: Record<number, string> = {
-  3: '该商品暂无可销售的库存',
-  14: '受物流运输渠道限制影响，暂不支持在部分站点售卖',
-  15: '调价失败',
-};
+import {
+  SIMPLIFIED_REASON_TEMPLATES,
+  TEMU_API,
+  DELAY,
+  BATCH
+} from '~lib/constants';
 
 /**
  * 清理异常原因文本
@@ -352,12 +347,11 @@ async function processPageAndQueryErrors(
     }
   }
 
-  // 批量查询站点异常（每批 100 个 goodsId）
+  // 批量查询站点异常
   const goodsIdArray = Array.from(goodsIdToSkuIds.keys());
-  const BATCH_SIZE = 100;
 
-  for (let batchStart = 0; batchStart < goodsIdArray.length; batchStart += BATCH_SIZE) {
-    const batchEnd = Math.min(batchStart + BATCH_SIZE, goodsIdArray.length);
+  for (let batchStart = 0; batchStart < goodsIdArray.length; batchStart += BATCH.SITE_ERROR_QUERY) {
+    const batchEnd = Math.min(batchStart + BATCH.SITE_ERROR_QUERY, goodsIdArray.length);
     const batchGoodsIds = goodsIdArray.slice(batchStart, batchEnd);
 
     const pairs = batchGoodsIds.map(goodsId => ({
@@ -433,7 +427,7 @@ async function processPageAndQueryErrors(
       }
 
       // 批次间短暂延迟
-      await sleep(200);
+      await sleep(DELAY.BETWEEN_BATCHES);
 
     } catch (error) {
       console.warn(`[站点异常] 批次查询失败:`, error);
@@ -516,7 +510,7 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
           );
 
           // 计算是否还有更多页
-          const totalPages = Math.ceil(currentPageData.total / 100);
+          const totalPages = Math.ceil(currentPageData.total / TEMU_API.PAGINATION.PAGE_SIZE);
           hasMore = pageNum < totalPages;
 
           // ⭐ 并发点1：如果还有下一页，立即开始拉取（不等待当前页查询完成）
@@ -535,7 +529,7 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
           pendingQueries.push(queryPromise);
 
           // 短暂延迟避免请求过快
-          await sleep(300);
+          await sleep(DELAY.BETWEEN_REQUESTS);
         }
 
         // 等待所有查询完成
@@ -568,7 +562,7 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
 
       // 店铺间等待
       if (i < malls.length - 1) {
-        await sleep(2000);
+        await sleep(DELAY.BETWEEN_SHOPS);
         if (await checkAndHandleStop('店铺间等待后')) return;
       }
     }
