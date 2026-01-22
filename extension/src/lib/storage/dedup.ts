@@ -4,7 +4,7 @@
  * 用于判断下架记录是否已推送，避免重复通知
  */
 
-import { CONFIG_KEYS } from '~types/storage';
+import { CONFIG_KEYS } from "~types/storage"
 
 /**
  * 生成日期字符串（YYYY-MM-DD）
@@ -38,9 +38,11 @@ class DedupManager {
    * 获取已推送的记录键集合
    */
   private async getPushedKeys(): Promise<Set<string>> {
-    const result = await chrome.storage.local.get(CONFIG_KEYS.PUSHED_RECORDS);
-    const record = result[CONFIG_KEYS.PUSHED_RECORDS] || { unpublished_keys: [] };
-    return new Set(record.unpublished_keys);
+    const result = await chrome.storage.local.get(CONFIG_KEYS.PUSHED_RECORDS)
+    const record = result[CONFIG_KEYS.PUSHED_RECORDS] || {
+      unpublished_keys: []
+    }
+    return new Set(record.unpublished_keys)
   }
 
   /**
@@ -51,7 +53,7 @@ class DedupManager {
       [CONFIG_KEYS.PUSHED_RECORDS]: {
         unpublished_keys: Array.from(keys)
       }
-    });
+    })
   }
 
   /**
@@ -72,9 +74,9 @@ class DedupManager {
    * 标记记录为已推送
    */
   async markAsPushed(keys: string[]): Promise<void> {
-    const pushedKeys = await this.getPushedKeys();
-    keys.forEach(key => pushedKeys.add(key));
-    await this.savePushedKeys(pushedKeys);
+    const pushedKeys = await this.getPushedKeys()
+    keys.forEach((key) => pushedKeys.add(key))
+    await this.savePushedKeys(pushedKeys)
   }
 
   /**
@@ -94,13 +96,13 @@ class DedupManager {
         record.mallId,
         record.skcId,
         record.unPublishedTime
-      );
+      )
       if (!pushedKeys.has(key)) {
-        newKeys.push(key);
+        newKeys.push(key)
       }
     }
 
-    return newKeys;
+    return newKeys
   }
 
   /**
@@ -113,7 +115,7 @@ class DedupManager {
     const cutoffDateStr = formatDateKey(cutoffDate.getTime());
     let deletedCount = 0;
 
-    const keysToKeep = new Set<string>();
+    const keysToKeep = new Set<string>()
     for (const key of pushedKeys) {
       // 解析日期（格式：mallId:skcId:YYYY-MM-DD）
       const parts = key.split(':');
@@ -122,43 +124,43 @@ class DedupManager {
         if (dateStr >= cutoffDateStr) {
           keysToKeep.add(key);
         } else {
-          deletedCount++;
+          deletedCount++
         }
       }
     }
 
-    await this.savePushedKeys(keysToKeep);
-    return deletedCount;
+    await this.savePushedKeys(keysToKeep)
+    return deletedCount
   }
 
   /**
    * 获取已推送记录的统计信息
    */
   async getStats(): Promise<{
-    total: number;
-    byMall: Map<string, number>;
+    total: number
+    byMall: Map<string, number>
   }> {
-    const pushedKeys = await this.getPushedKeys();
-    const byMall = new Map<string, number>();
+    const pushedKeys = await this.getPushedKeys()
+    const byMall = new Map<string, number>()
 
     for (const key of pushedKeys) {
-      const mallId = key.split(':')[0];
-      byMall.set(mallId, (byMall.get(mallId) || 0) + 1);
+      const mallId = key.split(":")[0]
+      byMall.set(mallId, (byMall.get(mallId) || 0) + 1)
     }
 
     return {
       total: pushedKeys.size,
       byMall
-    };
+    }
   }
 
   /**
    * 清空所有已推送记录
    */
   async clearAll(): Promise<void> {
-    await this.savePushedKeys(new Set());
+    await this.savePushedKeys(new Set())
   }
 }
 
 // 导出单例
-export const dedup = new DedupManager();
+export const dedup = new DedupManager()

@@ -9,11 +9,11 @@
  */
 
 import type {
-  UnpublishedItem,
+  ApiCache,
   SiteErrorItem,
   SkuMapping,
-  ApiCache
-} from '~types/storage';
+  UnpublishedItem
+} from "~types/storage"
 
 const DB_NAME = 'autotemu-db';
 const DB_VERSION = 4;  // V4: site_errors 表主键改为 [mallId, skcId]，支持去重更新
@@ -22,7 +22,7 @@ const DB_VERSION = 4;  // V4: site_errors 表主键改为 [mallId, skcId]，支�
  * IndexedDB 数据库管理器
  */
 class DatabaseManager {
-  private db: IDBDatabase | null = null;
+  private db: IDBDatabase | null = null
 
   /**
    * 检查数据库连接是否有效
@@ -52,12 +52,12 @@ class DatabaseManager {
     this.db = null;
 
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const request = indexedDB.open(DB_NAME, DB_VERSION)
 
       request.onerror = () => {
-        console.error('[IDB] 数据库打开失败:', request.error);
-        reject(request.error);
-      };
+        console.error("[IDB] 数据库打开失败:", request.error)
+        reject(request.error)
+      }
 
       request.onsuccess = () => {
         this.db = request.result;
@@ -73,11 +73,11 @@ class DatabaseManager {
       };
 
       request.onupgradeneeded = (event) => {
-        console.log('[IDB] 数据库升级中...');
-        const db = (event.target as IDBOpenDBRequest).result;
-        this.createStores(db);
-      };
-    });
+        console.log("[IDB] 数据库升级中...")
+        const db = (event.target as IDBOpenDBRequest).result
+        this.createStores(db)
+      }
+    })
   }
 
   /**
@@ -121,24 +121,24 @@ class DatabaseManager {
     console.log('[IDB] 创建表: site_errors (V4)');
 
     // 3. SKU 映射表（goodsSkuId -> skcId）
-    if (!db.objectStoreNames.contains('sku_mapping')) {
-      const skuMappingStore = db.createObjectStore('sku_mapping', {
+    if (!db.objectStoreNames.contains("sku_mapping")) {
+      const skuMappingStore = db.createObjectStore("sku_mapping", {
         // 复合主键：[mallId, goodsSkuId]
-        keyPath: ['mallId', 'goodsSkuId']
-      });
+        keyPath: ["mallId", "goodsSkuId"]
+      })
       // 索引：按店铺查询
-      skuMappingStore.createIndex('mallId', 'mallId', { unique: false });
-      console.log('[IDB] 创建表: sku_mapping');
+      skuMappingStore.createIndex("mallId", "mallId", { unique: false })
+      console.log("[IDB] 创建表: sku_mapping")
     }
 
     // 4. API 缓存表
-    if (!db.objectStoreNames.contains('api_cache')) {
-      const cacheStore = db.createObjectStore('api_cache', {
-        keyPath: 'key'
-      });
+    if (!db.objectStoreNames.contains("api_cache")) {
+      const cacheStore = db.createObjectStore("api_cache", {
+        keyPath: "key"
+      })
       // 索引：按过期时间查询（用于清理过期缓存）
-      cacheStore.createIndex('expiry', 'expiry', { unique: false });
-      console.log('[IDB] 创建表: api_cache');
+      cacheStore.createIndex("expiry", "expiry", { unique: false })
+      console.log("[IDB] 创建表: api_cache")
     }
   }
 
@@ -150,45 +150,45 @@ class DatabaseManager {
    * 添加数据（如果已存在则失败）
    */
   async add(storeName: string, data: any): Promise<void> {
-    const db = await this.init();
+    const db = await this.init()
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readwrite');
-      const store = tx.objectStore(storeName);
-      const request = store.add(data);
+      const tx = db.transaction(storeName, "readwrite")
+      const store = tx.objectStore(storeName)
+      const request = store.add(data)
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
   }
 
   /**
    * 保存或更新数据（覆盖已存在的数据）
    */
   async put(storeName: string, data: any): Promise<void> {
-    const db = await this.init();
+    const db = await this.init()
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readwrite');
-      const store = tx.objectStore(storeName);
-      const request = store.put(data);
+      const tx = db.transaction(storeName, "readwrite")
+      const store = tx.objectStore(storeName)
+      const request = store.put(data)
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
   }
 
   /**
    * 获取单条数据
    */
   async get(storeName: string, key: any): Promise<any> {
-    const db = await this.init();
+    const db = await this.init()
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readonly');
-      const store = tx.objectStore(storeName);
-      const request = store.get(key);
+      const tx = db.transaction(storeName, "readonly")
+      const store = tx.objectStore(storeName)
+      const request = store.get(key)
 
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
   }
 
   /**
@@ -201,46 +201,46 @@ class DatabaseManager {
     indexName?: string,
     query?: any
   ): Promise<any[]> {
-    const db = await this.init();
+    const db = await this.init()
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readonly');
-      const store = tx.objectStore(storeName);
-      const target = indexName ? store.index(indexName) : store;
-      const request = target.getAll(query);
+      const tx = db.transaction(storeName, "readonly")
+      const store = tx.objectStore(storeName)
+      const target = indexName ? store.index(indexName) : store
+      const request = target.getAll(query)
 
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
+      request.onsuccess = () => resolve(request.result || [])
+      request.onerror = () => reject(request.error)
+    })
   }
 
   /**
    * 删除数据
    */
   async delete(storeName: string, key: any): Promise<void> {
-    const db = await this.init();
+    const db = await this.init()
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readwrite');
-      const store = tx.objectStore(storeName);
-      const request = store.delete(key);
+      const tx = db.transaction(storeName, "readwrite")
+      const store = tx.objectStore(storeName)
+      const request = store.delete(key)
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
   }
 
   /**
    * 清空表数据
    */
   async clear(storeName: string): Promise<void> {
-    const db = await this.init();
+    const db = await this.init()
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readwrite');
-      const store = tx.objectStore(storeName);
-      const request = store.clear();
+      const tx = db.transaction(storeName, "readwrite")
+      const store = tx.objectStore(storeName)
+      const request = store.clear()
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
   }
 
   // ============================================
@@ -255,38 +255,38 @@ class DatabaseManager {
     storeName: string,
     items: any[]
   ): Promise<{ success: number; errors: any[] }> {
-    const db = await this.init();
+    const db = await this.init()
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readwrite');
-      const store = tx.objectStore(storeName);
+      const tx = db.transaction(storeName, "readwrite")
+      const store = tx.objectStore(storeName)
 
-      let completed = 0;
-      const errors: any[] = [];
+      let completed = 0
+      const errors: any[] = []
 
       items.forEach((item) => {
-        const request = store.put(item);
+        const request = store.put(item)
 
         request.onsuccess = () => {
-          completed++;
+          completed++
           if (completed === items.length) {
-            resolve({ success: items.length - errors.length, errors });
+            resolve({ success: items.length - errors.length, errors })
           }
-        };
+        }
 
         request.onerror = () => {
-          errors.push(request.error);
-          completed++;
+          errors.push(request.error)
+          completed++
           if (completed === items.length) {
-            resolve({ success: items.length - errors.length, errors });
+            resolve({ success: items.length - errors.length, errors })
           }
-        };
-      });
+        }
+      })
 
       // 处理空数组情况
       if (items.length === 0) {
-        resolve({ success: 0, errors: [] });
+        resolve({ success: 0, errors: [] })
       }
-    });
+    })
   }
 
   // ============================================
@@ -299,14 +299,18 @@ class DatabaseManager {
    * @param value 缓存值
    * @param ttlMinutes 过期时间（分钟，默认 30 分钟）
    */
-  async setCache(key: string, value: any, ttlMinutes: number = 30): Promise<void> {
+  async setCache(
+    key: string,
+    value: any,
+    ttlMinutes: number = 30
+  ): Promise<void> {
     const cacheItem: ApiCache = {
       key,
       value,
       expiry: Date.now() + ttlMinutes * 60 * 1000,
       createdAt: Date.now()
-    };
-    await this.put('api_cache', cacheItem);
+    }
+    await this.put("api_cache", cacheItem)
   }
 
   /**
@@ -314,17 +318,17 @@ class DatabaseManager {
    * 如果缓存过期则自动删除并返回 null
    */
   async getCache(key: string): Promise<any> {
-    const item = await this.get('api_cache', key);
-    if (!item) return null;
+    const item = await this.get("api_cache", key)
+    if (!item) return null
 
     // 检查是否过期
     if (Date.now() > item.expiry) {
-      await this.delete('api_cache', key);
-      console.log('[IDB] 缓存已过期:', key);
-      return null;
+      await this.delete("api_cache", key)
+      console.log("[IDB] 缓存已过期:", key)
+      return null
     }
 
-    return item.value;
+    return item.value
   }
 
   /**
@@ -332,32 +336,32 @@ class DatabaseManager {
    * @returns 删除的缓存数量
    */
   async clearExpiredCache(): Promise<number> {
-    const db = await this.init();
+    const db = await this.init()
     return new Promise((resolve, reject) => {
-      const tx = db.transaction('api_cache', 'readwrite');
-      const store = tx.objectStore('api_cache');
-      const index = store.index('expiry');
-      const now = Date.now();
+      const tx = db.transaction("api_cache", "readwrite")
+      const store = tx.objectStore("api_cache")
+      const index = store.index("expiry")
+      const now = Date.now()
 
-      const range = IDBKeyRange.upperBound(now);
-      const request = index.openCursor(range);
+      const range = IDBKeyRange.upperBound(now)
+      const request = index.openCursor(range)
 
-      let deleted = 0;
+      let deleted = 0
 
       request.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result;
+        const cursor = (event.target as IDBRequest).result
         if (cursor) {
-          cursor.delete();
-          deleted++;
-          cursor.continue();
+          cursor.delete()
+          deleted++
+          cursor.continue()
         } else {
-          console.log('[IDB] 清理过期缓存:', deleted, '条');
-          resolve(deleted);
+          console.log("[IDB] 清理过期缓存:", deleted, "条")
+          resolve(deleted)
         }
-      };
+      }
 
-      request.onerror = () => reject(request.error);
-    });
+      request.onerror = () => reject(request.error)
+    })
   }
 
   // ============================================
@@ -367,19 +371,23 @@ class DatabaseManager {
   /**
    * 获取表中的记录数
    */
-  async count(storeName: string, indexName?: string, query?: any): Promise<number> {
-    const db = await this.init();
+  async count(
+    storeName: string,
+    indexName?: string,
+    query?: any
+  ): Promise<number> {
+    const db = await this.init()
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readonly');
-      const store = tx.objectStore(storeName);
-      const target = indexName ? store.index(indexName) : store;
-      const request = target.count(query);
+      const tx = db.transaction(storeName, "readonly")
+      const store = tx.objectStore(storeName)
+      const target = indexName ? store.index(indexName) : store
+      const request = target.count(query)
 
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
   }
 }
 
 // 导出单例
-export default new DatabaseManager();
+export default new DatabaseManager()

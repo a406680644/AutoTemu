@@ -12,9 +12,9 @@
  * 店铺信息
  */
 export interface Mall {
-  mallId: string;           // 店铺 ID
-  mallName: string;         // 店铺名称
-  managedType: number;      // 管理类型
+  mallId: string // 店铺 ID
+  mallName: string // 店铺名称
+  managedType: number // 管理类型
 }
 
 /**
@@ -23,10 +23,10 @@ export interface Mall {
 export interface UserInfoResponse {
   success?: boolean;
   result?: {
-    mallList?: Mall[];
-  };
-  errorCode?: number;
-  errorMsg?: string;
+    mallList?: Mall[]
+  }
+  errorCode?: number
+  errorMsg?: string
 }
 
 /**
@@ -35,7 +35,7 @@ export interface UserInfoResponse {
 export interface UnpublishedDataResponse {
   success?: boolean;
   result?: {
-    total?: number;
+    total?: number
     dataList?: Array<{
       goodsSkuId: string;
       goodsName: string;
@@ -46,12 +46,12 @@ export interface UnpublishedDataResponse {
         approveStatus?: number;
       }>;
       punishInfoList?: Array<{
-        reason?: string;
-      }>;
-    }>;
-  };
-  errorCode?: number;
-  errorMsg?: string;
+        reason?: string
+      }>
+    }>
+  }
+  errorCode?: number
+  errorMsg?: string
 }
 
 /**
@@ -60,18 +60,18 @@ export interface UnpublishedDataResponse {
 export interface PublishedDataResponse {
   success?: boolean;
   result?: {
-    total?: number;
+    total?: number
     dataList?: Array<{
-      goodsId: number;
-      goodsName: string;
+      goodsId: number
+      goodsName: string
       skuList?: Array<{
-        goodsSkuId: number;
-        skcId: string;
-      }>;
-    }>;
-  };
-  errorCode?: number;
-  errorMsg?: string;
+        goodsSkuId: number
+        skcId: string
+      }>
+    }>
+  }
+  errorCode?: number
+  errorMsg?: string
 }
 
 /**
@@ -125,19 +125,19 @@ export interface SiteErrorResponse {
  * 钉钉卡片消息
  */
 export interface DingtalkCardMessage {
-  msgtype: 'markdown';
+  msgtype: "markdown"
   markdown: {
-    title: string;
-    text: string;
-  };
+    title: string
+    text: string
+  }
 }
 
 /**
  * 钉钉 Webhook 响应
  */
 export interface DingtalkWebhookResponse {
-  errcode: number;
-  errmsg: string;
+  errcode: number
+  errmsg: string
 }
 
 // ============================================
@@ -148,21 +148,21 @@ export interface DingtalkWebhookResponse {
  * Bridge 请求
  */
 export interface BridgeRequest {
-  type: 'bridge-fetch';
+  type: "bridge-fetch"
   payload: {
-    url: string;
-    method?: string;
-    data?: any;
-    headers?: Record<string, string>;
-  };
+    url: string
+    method?: string
+    data?: any
+    headers?: Record<string, string>
+  }
 }
 
 /**
  * Bridge 响应
  */
 export interface BridgeResponse {
-  ok: boolean;
-  status?: number;
-  data?: any;
-  error?: string;
+  ok: boolean
+  status?: number
+  data?: any
+  error?: string
 }

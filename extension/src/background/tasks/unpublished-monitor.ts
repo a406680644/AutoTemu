@@ -70,31 +70,31 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
   const mallIds = options?.mallIds;
   const skipPush = options?.skipPush ?? false;
   try {
-    console.log('[下架监控] 开始执行任务');
-    await taskState.addLog('info', '开始执行下架监控任务');
+    console.log("[下架监控] 开始执行任务")
+    await taskState.addLog("info", "开始执行下架监控任务")
 
     // 清理停止标志和展示数据
     await taskState.clearStopFlag();
     await taskState.clearFetchedData();
 
     // 步骤 1: 获取店铺列表
-    await taskState.addLog('info', '获取店铺列表...');
-    let malls = await temuApi.getMallList();
+    await taskState.addLog("info", "获取店铺列表...")
+    let malls = await temuApi.getMallList()
 
     if (!malls || malls.length === 0) {
-      throw new Error('未找到任何店铺，请先登录 Temu 卖家中心');
+      throw new Error("未找到任何店铺，请先登录 Temu 卖家中心")
     }
 
     // 如果指定了店铺 ID，则过滤
     if (mallIds && mallIds.length > 0) {
-      malls = malls.filter(mall => mallIds.includes(mall.mallId));
+      malls = malls.filter((mall) => mallIds.includes(mall.mallId))
       if (malls.length === 0) {
-        throw new Error('指定的店铺 ID 不存在');
+        throw new Error("指定的店铺 ID 不存在")
       }
     }
 
-    await taskState.addLog('info', `获取到 ${malls.length} 个店铺`);
-    await taskState.start(malls.length);
+    await taskState.addLog("info", `获取到 ${malls.length} 个店铺`)
+    await taskState.start(malls.length)
 
     // 步骤 2: 逐个店铺串行执行
     // 存储结构：mallId -> date -> UnpublishedItem
@@ -112,8 +112,11 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
       const mallName = mall.mallName;
       const mallId = mall.mallId;
 
-      await taskState.addLog('info', `[${i + 1}/${malls.length}] 处理店铺: ${mallName}`);
-      await taskState.updateProgress(i, mallName);
+      await taskState.addLog(
+        "info",
+        `[${i + 1}/${malls.length}] 处理店铺: ${mallName}`
+      )
+      await taskState.updateProgress(i, mallName)
 
       try {
         // 步骤 2.1: 拉取该店铺的已下架数据
@@ -136,7 +139,7 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
             mallId,
             mall.managedType,
             pageNum
-          );
+          )
 
           // 检查停止标志（请求后）
           if (await taskState.shouldStop()) {
@@ -147,9 +150,9 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
           }
 
           await taskState.addLog(
-            'info',
+            "info",
             `店铺 ${mallName}: 拉取第 ${pageNum} 页，共 ${result.total} 条记录`
-          );
+          )
 
           // 保存拉取的数据用于展示
           const displayItems = result.dataList.map(item => ({
@@ -174,9 +177,9 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
           }
 
           // 检查是否还有更多页
-          const totalPages = Math.ceil(result.total / 100);
-          hasMore = pageNum < totalPages;
-          pageNum++;
+          const totalPages = Math.ceil(result.total / 100)
+          hasMore = pageNum < totalPages
+          pageNum++
 
           if (hasMore) {
             await sleep(1000);
@@ -223,12 +226,11 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
         } else {
           await taskState.addLog('info', `店铺 ${mallName}: 无下架记录`);
         }
-
       } catch (error) {
         await taskState.addLog(
-          'error',
+          "error",
           `店铺 ${mallName} 处理失败: ${error instanceof Error ? error.message : String(error)}`
-        );
+        )
       }
 
       // 等待 2 秒后处理下一个店铺（避免风控）
@@ -336,15 +338,17 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
     }
 
     // 任务完成
-    await taskState.updateProgress(malls.length);
-    await taskState.complete();
-    await taskState.addLog('info', '下架监控任务完成');
-    console.log('[下架监控] 任务执行完成');
-
+    await taskState.updateProgress(malls.length)
+    await taskState.complete()
+    await taskState.addLog("info", "下架监控任务完成")
+    console.log("[下架监控] 任务执行完成")
   } catch (error) {
-    console.error('[下架监控] 任务执行失败:', error);
-    await taskState.fail(error instanceof Error ? error.message : String(error));
-    await taskState.addLog('error', `任务失败: ${error instanceof Error ? error.message : String(error)}`);
-    throw error;
+    console.error("[下架监控] 任务执行失败:", error)
+    await taskState.fail(error instanceof Error ? error.message : String(error))
+    await taskState.addLog(
+      "error",
+      `任务失败: ${error instanceof Error ? error.message : String(error)}`
+    )
+    throw error
   }
 }

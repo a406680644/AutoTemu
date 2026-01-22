@@ -5,9 +5,15 @@
   "description": "A basic Plasmo extension.",
   "author": "Plasmo Corp. <foss@plasmo.com>",
   "scripts": {
+    "predev": "node scripts/generate-registry.js",
     "dev": "plasmo dev",
+    "prebuild": "node scripts/generate-registry.js",
     "build": "plasmo build",
-    "package": "plasmo package"
+    "package": "plasmo package",
+    "generate-registry": "node scripts/generate-registry.js",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src"
   },
   "dependencies": {
     "plasmo": "0.90.5",

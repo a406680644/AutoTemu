@@ -1,16 +1,11 @@
 /**
- * AutoTemu RPA 运行页
+ * Runner 页面重定向
  *
- * RPA 友好设计：
- * - 大按钮，易于自动化点击
- * - 明确的元素 ID（rpa-run-button, rpa-log-output, rpa-download-button）
- * - 清晰的状态显示（data-status 属性）
- * - 实时进度更新
+ * 保留此文件用于向后兼容
+ * 自动重定向到新的主应用页面
  */
 
-import { useEffect, useState } from 'react';
-import { sendToBackground } from '@plasmohq/messaging';
-import type { TaskType, TaskStatus } from '~types/task';
+import { useEffect } from "react"
 
 // 样式常量
 const styles = {
@@ -620,5 +615,5 @@ export default function RunnerPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }

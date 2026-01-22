@@ -4,8 +4,8 @@
  * 提供钉钉 Webhook 推送功能
  */
 
-import type { DingtalkCardMessage, DingtalkWebhookResponse } from '~types/api';
-import { withRetry } from '~lib/utils/retry';
+import { withRetry } from "~lib/utils/retry"
+import type { DingtalkCardMessage, DingtalkWebhookResponse } from "~types/api"
 
 /**
  * 钉钉 API 客户端
@@ -19,49 +19,49 @@ class DingtalkApiClient {
    */
   async sendCard(webhookUrl: string, card: DingtalkCardMessage): Promise<void> {
     try {
-      console.log('[钉钉 API] 发送消息:', card.markdown.title);
+      console.log("[钉钉 API] 发送消息:", card.markdown.title)
 
       // 验证 Webhook URL
-      if (!webhookUrl || !webhookUrl.startsWith('https://oapi.dingtalk.com/')) {
-        throw new Error('无效的钉钉 Webhook URL');
+      if (!webhookUrl || !webhookUrl.startsWith("https://oapi.dingtalk.com/")) {
+        throw new Error("无效的钉钉 Webhook URL")
       }
 
       // 发送请求（带重试）
       const response = await withRetry(
         async () => {
           const res = await fetch(webhookUrl, {
-            method: 'POST',
+            method: "POST",
             headers: {
-              'Content-Type': 'application/json'
+              "Content-Type": "application/json"
             },
             body: JSON.stringify(card)
-          });
+          })
 
           if (!res.ok) {
-            throw new Error('钉钉 Webhook 请求失败: HTTP ' + res.status);
+            throw new Error("钉钉 Webhook 请求失败: HTTP " + res.status)
           }
 
-          return res.json();
+          return res.json()
         },
         {
           maxRetries: 3,
           shouldRetry: (error) => {
             // 网络错误可以重试
-            return error.message.includes('HTTP');
+            return error.message.includes("HTTP")
           }
         }
-      );
+      )
 
-      const data = response as DingtalkWebhookResponse;
+      const data = response as DingtalkWebhookResponse
 
       if (data.errcode !== 0) {
-        throw new Error(`钉钉推送失败: ${data.errmsg}`);
+        throw new Error(`钉钉推送失败: ${data.errmsg}`)
       }
 
-      console.log('[钉钉 API] 消息发送成功');
+      console.log("[钉钉 API] 消息发送成功")
     } catch (error) {
-      console.error('[钉钉 API] 发送消息失败:', error);
-      throw error;
+      console.error("[钉钉 API] 发送消息失败:", error)
+      throw error
     }
   }
 
@@ -75,42 +75,42 @@ class DingtalkApiClient {
   buildUnpublishedCard(
     mallName: string,
     items: Array<{
-      skcId: string;
-      goodsName: string;
-      unPublishedReason: string;
-      unPublishedTime: number;
+      skcId: string
+      goodsName: string
+      unPublishedReason: string
+      unPublishedTime: number
     }>,
     mallId?: string
   ): DingtalkCardMessage {
-    const count = items.length;
-    const skcSet = new Set(items.map(item => item.skcId));
-    const skcCount = skcSet.size;
+    const count = items.length
+    const skcSet = new Set(items.map((item) => item.skcId))
+    const skcCount = skcSet.size
 
     // 格式化下架时间
     const formatTime = (timestamp: number) => {
-      const date = new Date(timestamp);
-      return date.toLocaleString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    };
+      const date = new Date(timestamp)
+      return date.toLocaleString("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    }
 
     // 构建商品明细列表（最多显示 10 条）
     const detailLines = items.slice(0, 10).map((item, index) => {
-      return `${index + 1}. **${item.skcId}** - ${item.unPublishedReason} (${formatTime(item.unPublishedTime)})`;
-    });
+      return `${index + 1}. **${item.skcId}** - ${item.unPublishedReason} (${formatTime(item.unPublishedTime)})`
+    })
 
     // 如果超过 10 条，显示省略提示
     if (items.length > 10) {
-      detailLines.push(`... 还有 ${items.length - 10} 条记录`);
+      detailLines.push(`... 还有 ${items.length - 10} 条记录`)
     }
 
     // 构建跳转链接
     const jumpUrl = mallId
       ? `https://agentseller.temu.com/goods/offlineList?mallId=${mallId}`
-      : 'https://agentseller.temu.com/goods/offlineList';
+      : "https://agentseller.temu.com/goods/offlineList"
 
     // 构建 Markdown 内容
     const text = `
@@ -124,20 +124,20 @@ class DingtalkApiClient {
 
 **商品明细**
 
-${detailLines.join('\n')}
+${detailLines.join("\n")}
 
 ---
 
 [查看详情](${jumpUrl}) | 推送时间：${formatTime(Date.now())}
-    `.trim();
+    `.trim()
 
     return {
-      msgtype: 'markdown',
+      msgtype: "markdown",
       markdown: {
         title: `${mallName} - 新增 ${count} 条已下架商品`,
         text
       }
-    };
+    }
   }
 
   /**
@@ -229,4 +229,4 @@ ${mallSections.join('\n\n')}
 }
 
 // 导出单例
-export const dingtalkApi = new DingtalkApiClient();
+export const dingtalkApi = new DingtalkApiClient()

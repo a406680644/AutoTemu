@@ -15,39 +15,41 @@ import { runScheduledPush } from "./tasks/scheduled-push";
 import { closeCreatedTab } from "~lib/api/bridge-handler";
 import { config } from "~lib/storage/config";
 
-console.log('[SW] Service Worker 加载成功');
+import { runUnpublishedMonitor } from "./tasks/unpublished-monitor"
+
+console.log("[SW] Service Worker 加载成功")
 
 // ============================================
 // 扩展安装/更新事件
 // ============================================
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('[SW] 扩展已安装/更新:', details.reason);
+  console.log("[SW] 扩展已安装/更新:", details.reason)
 
   if (details.reason === 'install') {
     await handleFirstInstall();
   } else if (details.reason === 'update') {
     await handleUpdate(details.previousVersion);
   }
-});
+})
 
 /**
  * 首次安装处理
  */
 async function handleFirstInstall() {
-  console.log('[SW] 首次安装，初始化中...');
+  console.log("[SW] 首次安装，初始化中...")
 
   try {
     // 初始化 IndexedDB
-    await db.init();
-    console.log('[SW] IndexedDB 初始化成功');
+    await db.init()
+    console.log("[SW] IndexedDB 初始化成功")
 
     // 初始化配置
     await chrome.storage.local.set({
-      enabled: false,
-      sync_interval: 30,
+      enabled: false, // 默认不启用自动同步
+      sync_interval: 30, // 默认 30 分钟
       task_state: {
-        status: 'idle',
+        status: "idle",
         progress: 0,
         totalMalls: 0,
         completedMalls: 0,
@@ -56,15 +58,15 @@ async function handleFirstInstall() {
       pushed_records: {
         unpublished_keys: []
       }
-    });
-    console.log('[SW] 配置初始化成功');
+    })
+    console.log("[SW] 配置初始化成功")
 
-    // 创建定时任务
-    await createAlarms();
-    console.log('[SW] 定时任务创建成功');
-
+    // 创建定时任务（默认不启用）
+    // 用户在 Options 页面启用后才会生效
+    await createAlarms()
+    console.log("[SW] 定时任务创建成功")
   } catch (error) {
-    console.error('[SW] 初始化失败:', error);
+    console.error("[SW] 初始化失败:", error)
   }
 }
 
@@ -126,15 +128,19 @@ async function createAlarms() {
   if (enabled) {
     await chrome.alarms.create('unpublished-monitor', {
       periodInMinutes: interval
-    });
-    console.log('[SW] 已创建定时任务: unpublished-monitor, 间隔:', interval, '分钟');
+    })
+    console.log(
+      "[SW] 已创建定时任务: unpublished-monitor, 间隔:",
+      interval,
+      "分钟"
+    )
   } else {
     await chrome.alarms.clear('unpublished-monitor');
     console.log('[SW] 已清除定时任务（未启用）');
   }
 
   // 清理过期缓存任务（每小时执行一次）
-  await chrome.alarms.create('cleanup-cache', {
+  await chrome.alarms.create("cleanup-cache", {
     periodInMinutes: 60
   });
   console.log('[SW] 已创建定时任务: cleanup-cache');
@@ -196,7 +202,7 @@ async function createPushAlarm() {
  * 定时任务触发
  */
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  console.log('[SW] 定时任务触发:', alarm.name);
+  console.log("[SW] 定时任务触发:", alarm.name)
 
   try {
     switch (alarm.name) {
@@ -233,12 +239,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         break;
 
       default:
-        console.warn('[SW] 未知的定时任务:', alarm.name);
+        console.warn("[SW] 未知的定时任务:", alarm.name)
     }
   } catch (error) {
-    console.error('[SW] 定时任务执行失败:', error);
+    console.error("[SW] 定时任务执行失败:", error)
   }
-});
+})
 
 // ============================================
 // 保活机制（waitUntil 模式）
@@ -250,13 +256,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
  */
 async function waitUntil(promise: Promise<any>): Promise<any> {
   const keepAlive = setInterval(() => {
-    chrome.runtime.getPlatformInfo();
-  }, 25 * 1000);
+    chrome.runtime.getPlatformInfo()
+  }, 25 * 1000) // 每 25 秒 Ping 一次
 
   try {
-    return await promise;
+    return await promise
   } finally {
-    clearInterval(keepAlive);
+    clearInterval(keepAlive)
   }
 }
 
@@ -268,9 +274,9 @@ self.addEventListener('error', (event) => {
   console.error('[SW] 全局错误:', event.error);
 });
 
-self.addEventListener('unhandledrejection', (event) => {
-  console.error('[SW] 未处理的 Promise 拒绝:', event.reason);
-});
+self.addEventListener("unhandledrejection", (event) => {
+  console.error("[SW] 未处理的 Promise 拒绝:", event.reason)
+})
 
 // ============================================
 // 初始化
@@ -278,9 +284,9 @@ self.addEventListener('unhandledrejection', (event) => {
 
 (async () => {
   try {
-    await db.init();
-    console.log('[SW] 数据库初始化成功');
+    await db.init()
+    console.log("[SW] 数据库初始化成功")
   } catch (error) {
-    console.error('[SW] 数据库初始化失败:', error);
+    console.error("[SW] 数据库初始化失败:", error)
   }
-})();
+})()
