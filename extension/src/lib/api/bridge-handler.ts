@@ -96,6 +96,14 @@ async function injectContentScript(tabId: number): Promise<boolean> {
   console.log('[Bridge] 尝试动态注入 Content Script...');
 
   try {
+    // 调试：获取标签页信息
+    const tab = await chrome.tabs.get(tabId);
+    console.log('[Bridge] 目标标签页信息:', {
+      id: tabId,
+      url: tab.url,
+      status: tab.status,
+      title: tab.title
+    });
     // 直接执行 Content Script 代码（内联方式）
     // 这是最可靠的方式，避免文件路径问题
     await chrome.scripting.executeScript({
