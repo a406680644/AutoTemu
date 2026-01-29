@@ -123,6 +123,14 @@ class TaskStateManager {
   }
 
   /**
+   * 获取任务开始时间
+   */
+  async getStartTime(): Promise<number | undefined> {
+    const state = await this.get();
+    return state.startTime;
+  }
+
+  /**
    * 更新进度
    */
   async updateProgress(

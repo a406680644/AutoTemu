@@ -22,6 +22,8 @@ export const TEMU_API = {
     SEMI_SUPPLIER: '/api/kiana/mms/robin/searchForSemiSupplier',
     /** 站点异常查询 */
     SITE_ERRORS: '/api/kiana/mms/robin/queryFullyOtherMessage',
+    /** 违规商品列表 */
+    VIOLATION_LIST: '/mms/tmod_punish/agent/merchant_appeal/entrance/list',
   },
 
   /** 页面 URL */
@@ -71,6 +73,16 @@ export const FEISHU_API = {
     TOKEN: '/open-apis/auth/v3/tenant_access_token/internal',
     /** 发送消息 */
     MESSAGES: '/open-apis/im/v1/messages',
+    /** Bitable 批量创建记录 */
+    BITABLE_BATCH_CREATE: '/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_create',
+    /** Bitable 批量更新记录 */
+    BITABLE_BATCH_UPDATE: '/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_update',
+    /** Bitable 批量获取记录（list） */
+    BITABLE_LIST: '/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records',
+    /** Bitable 搜索记录（search） */
+    BITABLE_SEARCH: '/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search',
+    /** Wiki 获取节点信息（用于 wiki token 转换） */
+    WIKI_GET_NODE: '/open-apis/wiki/v2/spaces/get_node',
   },
 
   /** Token 配置 */
@@ -85,6 +97,12 @@ export const FEISHU_API = {
   CARD: {
     /** 预警卡片颜色 */
     ALERT_COLOR: 'red',
+  },
+
+  /** Bitable 配置 */
+  BITABLE: {
+    /** 每批最大记录数 */
+    BATCH_SIZE: 500,
   },
 } as const;
 

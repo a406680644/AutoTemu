@@ -63,6 +63,24 @@ export interface SkuMapping {
 }
 
 /**
+ * 违规商品记录
+ *
+ * 主键：mallId + spuId（同一店铺同一 SPU 只保留一条）
+ */
+export interface ViolationItem {
+  // 复合主键
+  mallId: string;           // 店铺 ID
+  spuId: number;            // SPU ID
+
+  // 数据字段
+  mallName: string;         // 店铺名称
+  goodsName: string;        // 商品名称
+  violationDesc: string;    // 违规描述
+  siteNum: number;          // 涉及站点数
+  checkedAt: number;        // 检查时间戳
+}
+
+/**
  * API 缓存
  */
 export interface ApiCache {
@@ -82,6 +100,13 @@ export interface ApiCache {
 export type NotifyChannel = 'dingtalk' | 'feishu' | 'both' | 'none';
 
 /**
+ * Bitable Token 类型
+ * - base: 直接使用 base 格式的 app_token（如 bascnxxxxxxxx）
+ * - wiki: 使用 wiki 节点 token，需要先转换为真实的 app_token
+ */
+export type BitableTokenType = 'base' | 'wiki';
+
+/**
  * 用户配置
  */
 export interface UserConfig {
@@ -92,6 +117,12 @@ export interface UserConfig {
   feishu_app_id?: string;     // 飞书 App ID
   feishu_app_secret?: string; // 飞书 App Secret
   feishu_chat_id?: string;    // 飞书群聊 ID
+
+  // 飞书 Bitable 配置
+  feishu_bitable_app_token?: string;           // 多维表格 App Token
+  feishu_bitable_token_type?: BitableTokenType; // Token 类型（base 或 wiki）
+  feishu_bitable_site_error_table_id?: string; // 站点异常子表 ID
+  feishu_bitable_violation_table_id?: string;  // 违规商品子表 ID
 
   // 推送渠道选择
   notify_channel?: NotifyChannel;  // 推送渠道，默认 'dingtalk'
@@ -171,6 +202,12 @@ export const CONFIG_KEYS = {
   FEISHU_APP_SECRET: 'feishu_app_secret',
   FEISHU_CHAT_ID: 'feishu_chat_id',
 
+  // 飞书 Bitable 配置
+  FEISHU_BITABLE_APP_TOKEN: 'feishu_bitable_app_token',
+  FEISHU_BITABLE_TOKEN_TYPE: 'feishu_bitable_token_type',
+  FEISHU_BITABLE_SITE_ERROR_TABLE_ID: 'feishu_bitable_site_error_table_id',
+  FEISHU_BITABLE_VIOLATION_TABLE_ID: 'feishu_bitable_violation_table_id',
+
   // 推送渠道
   NOTIFY_CHANNEL: 'notify_channel',
 
@@ -192,6 +229,7 @@ export const CONFIG_KEYS = {
 export const STORE_NAMES = {
   UNPUBLISHED: "unpublished", // 已下架记录
   SITE_ERRORS: "site_errors", // 站点异常
+  VIOLATIONS: "violations",   // 违规商品
   SKU_MAPPING: "sku_mapping", // SKU 映射
   API_CACHE: "api_cache" // API 缓存
 } as const

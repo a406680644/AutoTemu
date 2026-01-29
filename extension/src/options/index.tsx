@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { config } from '~lib/storage/config';
 import { notifier } from '~lib/api/notifier';
-import type { NotifyChannel, UserConfig } from '~types/storage';
+import type { NotifyChannel, UserConfig, BitableTokenType } from '~types/storage';
 
 // 样式常量
 const styles = {
@@ -216,6 +216,12 @@ export default function OptionsPage() {
   const [syncInterval, setSyncInterval] = useState(30);
   const [enabled, setEnabled] = useState(false);
 
+  // 飞书 Bitable 配置状态
+  const [bitableAppToken, setBitableAppToken] = useState('');
+  const [bitableTokenType, setBitableTokenType] = useState<BitableTokenType>('base');
+  const [bitableSiteErrorTableId, setBitableSiteErrorTableId] = useState('');
+  const [bitableViolationTableId, setBitableViolationTableId] = useState('');
+
   // 定时推送配置状态
   const [pushTime, setPushTime] = useState('09:00');
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -233,6 +239,10 @@ export default function OptionsPage() {
       setFeishuAppId(userConfig.feishu_app_id || '');
       setFeishuAppSecret(userConfig.feishu_app_secret || '');
       setFeishuChatId(userConfig.feishu_chat_id || '');
+      setBitableAppToken(userConfig.feishu_bitable_app_token || '');
+      setBitableTokenType(userConfig.feishu_bitable_token_type || 'base');
+      setBitableSiteErrorTableId(userConfig.feishu_bitable_site_error_table_id || '');
+      setBitableViolationTableId(userConfig.feishu_bitable_violation_table_id || '');
       setSyncInterval(userConfig.sync_interval || 30);
       setEnabled(userConfig.enabled || false);
       setPushTime(userConfig.push_time || '09:00');
@@ -257,6 +267,10 @@ export default function OptionsPage() {
         feishu_app_id: feishuAppId,
         feishu_app_secret: feishuAppSecret,
         feishu_chat_id: feishuChatId,
+        feishu_bitable_app_token: bitableAppToken,
+        feishu_bitable_token_type: bitableTokenType,
+        feishu_bitable_site_error_table_id: bitableSiteErrorTableId,
+        feishu_bitable_violation_table_id: bitableViolationTableId,
         sync_interval: syncInterval,
         enabled,
         push_time: pushTime,
@@ -316,6 +330,7 @@ export default function OptionsPage() {
   // 检查配置状态
   const dingtalkConfigured = !!dingtalkWebhook;
   const feishuConfigured = !!(feishuAppId && feishuAppSecret && feishuChatId);
+  const bitableConfigured = !!(bitableAppToken && (bitableSiteErrorTableId || bitableViolationTableId));
 
   if (loading) {
     return (
@@ -441,6 +456,97 @@ export default function OptionsPage() {
               value={feishuChatId}
               onChange={(e) => setFeishuChatId(e.target.value)}
               placeholder="oc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              style={styles.input}
+            />
+          </div>
+        </div>
+
+        {/* 飞书 Bitable 配置 */}
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>
+            飞书多维表格 (Bitable)
+            <span style={styles.statusBadge(bitableConfigured)}>
+              {bitableConfigured ? '已配置' : '未配置'}
+            </span>
+          </h2>
+          <div style={{ marginBottom: 16, fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+            用于将站点异常和违规商品数据同步到飞书多维表格，便于数据分析和团队协作。
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              App Token
+              <span style={styles.labelHint}> （多维表格的唯一标识，在表格 URL 中获取）</span>
+            </label>
+            <input
+              type="text"
+              value={bitableAppToken}
+              onChange={(e) => setBitableAppToken(e.target.value)}
+              placeholder={bitableTokenType === 'base' ? 'bascnxxxxxxxxxxxxxxxx' : 'wikcnxxxxxxxxxxxxxxxx'}
+              style={styles.input}
+            />
+            <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+              <label style={{
+                ...styles.radioLabel,
+                ...(bitableTokenType === 'base' ? styles.radioLabelActive : {}),
+                padding: '6px 12px',
+                fontSize: 13
+              }}>
+                <input
+                  type="radio"
+                  name="bitableTokenType"
+                  value="base"
+                  checked={bitableTokenType === 'base'}
+                  onChange={(e) => setBitableTokenType(e.target.value as BitableTokenType)}
+                  style={styles.radio}
+                />
+                <span>Base 格式</span>
+              </label>
+              <label style={{
+                ...styles.radioLabel,
+                ...(bitableTokenType === 'wiki' ? styles.radioLabelActive : {}),
+                padding: '6px 12px',
+                fontSize: 13
+              }}>
+                <input
+                  type="radio"
+                  name="bitableTokenType"
+                  value="wiki"
+                  checked={bitableTokenType === 'wiki'}
+                  onChange={(e) => setBitableTokenType(e.target.value as BitableTokenType)}
+                  style={styles.radio}
+                />
+                <span>Wiki 格式</span>
+              </label>
+            </div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+              {bitableTokenType === 'base'
+                ? 'URL 格式：https://xxx.feishu.cn/base/bascnxxx'
+                : 'URL 格式：https://xxx.feishu.cn/wiki/wikcnxxx（知识库中的多维表格）'}
+            </div>
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              站点异常子表 ID
+              <span style={styles.labelHint}> （站点异常数据写入的子表 ID）</span>
+            </label>
+            <input
+              type="text"
+              value={bitableSiteErrorTableId}
+              onChange={(e) => setBitableSiteErrorTableId(e.target.value)}
+              placeholder="tblxxxxxxxxxxxxxxxx"
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              违规商品子表 ID
+              <span style={styles.labelHint}> （违规商品数据写入的子表 ID）</span>
+            </label>
+            <input
+              type="text"
+              value={bitableViolationTableId}
+              onChange={(e) => setBitableViolationTableId(e.target.value)}
+              placeholder="tblxxxxxxxxxxxxxxxx"
               style={styles.input}
             />
           </div>

@@ -167,9 +167,10 @@ class TemuApiClient {
         ];
         const unPublishedReason = reasons.length > 0 ? reasons.join('、') : '运营手动下架';
 
-        return (item.skcList || []).map((skc) => ({
+        return (item.skcList || []).map((skc: any) => ({
           skcId: String(skc.skcId),
-          unPublishedTime: Number(item.unPublishedTime) || Date.now(),
+          // ⭐ 正确路径: skc.statusTime.unPublishedTime
+          unPublishedTime: Number(skc.statusTime?.unPublishedTime) || Date.now(),
           unPublishedReason
         }));
       });
@@ -324,6 +325,87 @@ class TemuApiClient {
       return data;
     } catch (error) {
       console.error('[Temu API] 查询站点异常失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 拉取违规商品列表
+   *
+   * ⭐ 使用 VIOLATION_LIST 接口
+   * ⭐ 必须携带 mallId 参数，每个店铺独立请求
+   *
+   * @param mallId 店铺 ID（必需）
+   * @param pageNum 页码（从 1 开始）
+   * @param pageSize 每页数量（默认 100）
+   */
+  async fetchViolations(
+    mallId: string,
+    pageNum: number = 1,
+    pageSize: number = 100
+  ): Promise<{
+    total: number;
+    dataList: Array<{
+      spuId: number;
+      goodsName: string;
+      violationDesc: string;
+      siteNum: number;
+    }>;
+  }> {
+    try {
+      console.log('[Temu API] 拉取违规商品 - 店铺:', mallId, '页码:', pageNum);
+
+      const requestPayload = {
+        page_num: pageNum,
+        page_size: pageSize,
+        target_type: 'goods',
+        punish_type: 1,
+        appeal_status_list: [1, 2, 0]
+      };
+
+      console.log('[Temu API] 请求载荷:', JSON.stringify(requestPayload));
+
+      const response = await bridgeRequestWithRetry(
+        TEMU_API.HOST,
+        'bridge-fetch',
+        {
+          url: getTemuApiUrl(TEMU_API.ENDPOINTS.VIOLATION_LIST),
+          method: 'POST',
+          data: requestPayload,
+          headers: {
+            ...BASE_HEADERS,
+            Mallid: String(mallId) // ⭐ 关键：携带店铺 ID
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('拉取违规商品失败: HTTP ' + response.status);
+      }
+
+      const data = response.data as any;
+
+      // Temu API 使用 success: true 或 error_code: 1000000 表示成功
+      if (data.success === false || (data.error_code !== undefined && data.error_code !== 1000000)) {
+        throw new Error(data.error_msg || '拉取违规商品失败');
+      }
+
+      const total = data.result?.total || 0;
+      // ⭐ 正确的字段名：punish_appeal_entrance_list
+      const rawList = data.result?.punish_appeal_entrance_list || [];
+
+      // 解析数据（字段名使用 snake_case）
+      const dataList = rawList.map((item: any) => ({
+        spuId: item.spu_id,
+        goodsName: item.goods_name || '',
+        violationDesc: item.violation_desc || '',
+        siteNum: item.site_num || 0
+      }));
+
+      console.log('[Temu API] 违规商品数据:', dataList.length, '/', total);
+      return { total, dataList };
+    } catch (error) {
+      console.error('[Temu API] 拉取违规商品失败:', error);
       throw error;
     }
   }

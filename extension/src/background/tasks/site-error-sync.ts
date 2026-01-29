@@ -10,6 +10,7 @@
  */
 
 import { temuApi } from '~lib/api/temu';
+import { feishuBitable } from '~lib/api/feishu-bitable';
 import { taskState } from '~lib/storage/task-state';
 import db from '~lib/storage/idb';
 import type { SiteErrorItem } from '~types/storage';
@@ -297,6 +298,82 @@ async function checkAndHandleStop(context: string): Promise<boolean> {
   return false;
 }
 
+// ============================================
+// 差异对比逻辑
+// ============================================
+
+/**
+ * 差异对比结果
+ */
+interface SiteErrorDiffResult {
+  newItems: SiteErrorItem[];      // 新增的记录（历史不存在）
+  updatedItems: SiteErrorItem[];  // 更新的记录（异常原因变化）
+  unchangedCount: number;         // 无变化的记录数
+}
+
+/**
+ * 生成站点异常的唯一键
+ */
+function getSiteErrorKey(mallId: string, skcId: string): string {
+  return `${mallId}:${skcId}`;
+}
+
+/**
+ * 将异常原因数组转为可比较的字符串（排序后拼接）
+ */
+function normalizeErrorReasons(reasons: string[]): string {
+  return [...reasons].sort().join('|');
+}
+
+/**
+ * 计算站点异常的差异
+ *
+ * 对比逻辑：
+ * - 新记录（历史不存在）→ 新增
+ * - 异常原因变化 → 更新
+ * - 无变化 → 跳过
+ *
+ * @param currentItems 当前获取的数据
+ * @param historyItems 历史 IndexedDB 数据
+ * @returns 差异结果
+ */
+function computeSiteErrorDiff(
+  currentItems: SiteErrorItem[],
+  historyItems: SiteErrorItem[]
+): SiteErrorDiffResult {
+  // 构建历史数据的 Map（key -> errorReasons 的规范化字符串）
+  const historyMap = new Map<string, string>();
+  for (const item of historyItems) {
+    const key = getSiteErrorKey(item.mallId, item.skcId);
+    historyMap.set(key, normalizeErrorReasons(item.errorReasons));
+  }
+
+  const newItems: SiteErrorItem[] = [];
+  const updatedItems: SiteErrorItem[] = [];
+  let unchangedCount = 0;
+
+  for (const item of currentItems) {
+    const key = getSiteErrorKey(item.mallId, item.skcId);
+    const historyReasons = historyMap.get(key);
+
+    if (historyReasons === undefined) {
+      // 新记录
+      newItems.push(item);
+    } else {
+      const currentReasons = normalizeErrorReasons(item.errorReasons);
+      if (currentReasons !== historyReasons) {
+        // 异常原因变化
+        updatedItems.push(item);
+      } else {
+        // 无变化
+        unchangedCount++;
+      }
+    }
+  }
+
+  return { newItems, updatedItems, unchangedCount };
+}
+
 /**
  * 页面数据结构（用于流水线）
  */
@@ -472,7 +549,12 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
     await taskState.addLog("info", `获取到 ${malls.length} 个店铺`)
     await taskState.start(malls.length)
 
+    // ⭐ 在写入前获取历史快照（用于差异对比）
+    const historySnapshot = (await db.getAll('site_errors')) as SiteErrorItem[];
+    console.log(`[站点异常] 历史快照: ${historySnapshot.length} 条记录`);
+
     let totalErrors = 0;
+    const allCurrentItems: SiteErrorItem[] = [];  // 收集本次采集的所有数据
 
     // 步骤 2: 逐个店铺处理（店铺间串行，避免风控）
     for (let i = 0; i < malls.length; i++) {
@@ -544,9 +626,9 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
           mallErrors.push(...result);
         }
 
-        // 保存到 IndexedDB
+        // 收集本次采集的数据（先不写入 IndexedDB，等差异对比后再写入）
         if (mallErrors.length > 0) {
-          await db.putBatch("site_errors", mallErrors)
+          allCurrentItems.push(...mallErrors);
           totalErrors += mallErrors.length
           await taskState.addLog(
             "info",
@@ -567,6 +649,56 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
         await sleep(DELAY.BETWEEN_SHOPS);
         if (await checkAndHandleStop('店铺间等待后')) return;
       }
+    }
+
+    // ============================================
+    // 差异对比 + Bitable 写入 + IndexedDB 存储
+    // ============================================
+
+    await taskState.addLog('info', '正在进行差异对比...');
+
+    // ⭐ 使用任务开始前的历史快照与本次采集数据对比
+    const diff = computeSiteErrorDiff(allCurrentItems, historySnapshot);
+
+    await taskState.addLog(
+      'info',
+      `差异对比完成: 新增 ${diff.newItems.length} 条，更新 ${diff.updatedItems.length} 条，无变化 ${diff.unchangedCount} 条`
+    );
+
+    // ⭐ 差异写入 Bitable（新增 → 创建，更新 → 更新）
+    if (diff.newItems.length > 0 || diff.updatedItems.length > 0) {
+      await taskState.addLog('info', `正在写入飞书 Bitable...`);
+      try {
+        const writeResult = await feishuBitable.writeSiteErrorsWithDiff(
+          diff.newItems,
+          diff.updatedItems
+        );
+        if (writeResult.success) {
+          await taskState.addLog(
+            'info',
+            `Bitable 写入成功: 创建 ${writeResult.created} 条，更新 ${writeResult.updated} 条`
+          );
+        } else {
+          await taskState.addLog(
+            'warn',
+            `Bitable 写入失败: ${writeResult.error}`
+          );
+        }
+      } catch (error) {
+        // Bitable 写入失败不影响本地 IndexedDB 存储
+        await taskState.addLog(
+          'warn',
+          `Bitable 写入异常: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    } else {
+      await taskState.addLog('info', '无新增/更新记录，跳过 Bitable 写入');
+    }
+
+    // ⭐ 最后写入 IndexedDB（所有采集到的数据）
+    if (allCurrentItems.length > 0) {
+      await db.putBatch('site_errors', allCurrentItems);
+      console.log(`[站点异常] 已写入 IndexedDB: ${allCurrentItems.length} 条`);
     }
 
     // 任务完成

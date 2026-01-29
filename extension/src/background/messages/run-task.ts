@@ -14,6 +14,8 @@ import type { PlasmoMessaging } from "@plasmohq/messaging";
 import type { RunTaskRequest, RunTaskResponse } from "~types/task";
 import { runUnpublishedMonitor } from "../tasks/unpublished-monitor";
 import { runSiteErrorSync } from "../tasks/site-error-sync";
+import { runViolationMonitor } from "../tasks/violation-monitor";
+import { runScheduledPush } from "../tasks/scheduled-push";
 import { taskState } from "~lib/storage/task-state";
 import { ensureBridgeReady, closeCreatedTab } from "~lib/api/bridge-handler";
 
@@ -26,7 +28,7 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
 
   try {
     // 1. 验证任务类型
-    if (!taskType || !['unpublished', 'site-error'].includes(taskType)) {
+    if (!taskType || !['unpublished', 'site-error', 'violation', 'all'].includes(taskType)) {
       res.send({
         success: false,
         error: "无效的任务类型"
@@ -88,6 +90,90 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
         res.send({
           success: true,
           taskId: "site-error-" + Date.now()
+        })
+        break
+
+      case 'violation':
+        console.log('[run-task] 启动违规商品监控任务');
+
+        // 异步执行任务（不阻塞响应）
+        runViolationMonitor(mallIds)
+          .catch(async (error) => {
+            console.error('[run-task] 违规商品监控任务失败:', error);
+            await taskState.fail(error instanceof Error ? error.message : String(error));
+          })
+          .finally(async () => {
+            // 任务完成后关闭新创建的标签页
+            await closeCreatedTab();
+          });
+
+        res.send({
+          success: true,
+          taskId: "violation-" + Date.now()
+        })
+        break
+
+      case 'all':
+        console.log('[run-task] 启动一键执行（站点异常 + 违规商品 + 定时推送）');
+
+        // 并行执行三个任务
+        (async () => {
+          try {
+            await taskState.addLog('info', '开始并行执行所有任务...');
+
+            // 并行执行站点异常和违规商品监控
+            const [siteErrorResult, violationResult] = await Promise.allSettled([
+              runSiteErrorSync(mallIds).then(result => {
+                console.log('[run-task] 站点异常任务完成');
+                return result;
+              }),
+              runViolationMonitor(mallIds).then(result => {
+                console.log('[run-task] 违规商品任务完成');
+                return result;
+              }),
+            ]);
+
+            // 记录任务结果
+            if (siteErrorResult.status === 'rejected') {
+              await taskState.addLog('error', `站点异常任务失败: ${siteErrorResult.reason}`);
+            } else {
+              await taskState.addLog('info', '站点异常任务完成');
+            }
+
+            if (violationResult.status === 'rejected') {
+              await taskState.addLog('error', `违规商品任务失败: ${violationResult.reason}`);
+            } else {
+              await taskState.addLog('info', '违规商品任务完成');
+            }
+
+            // 执行定时推送
+            await taskState.addLog('info', '开始执行定时推送...');
+            const pushResult = await runScheduledPush();
+
+            if (pushResult.success) {
+              await taskState.addLog('info', `定时推送完成: ${pushResult.pushedCount} 条 SKC, ${pushResult.mallCount} 个店铺`);
+            } else {
+              await taskState.addLog('warn', `定时推送异常: ${pushResult.errors.join(', ')}`);
+            }
+
+            // 更新最终状态
+            const hasErrors = siteErrorResult.status === 'rejected' || violationResult.status === 'rejected';
+            if (hasErrors) {
+              await taskState.fail('部分任务执行失败，请查看日志');
+            } else {
+              await taskState.complete();
+            }
+          } catch (error) {
+            console.error('[run-task] 一键执行失败:', error);
+            await taskState.fail(error instanceof Error ? error.message : String(error));
+          } finally {
+            await closeCreatedTab();
+          }
+        })();
+
+        res.send({
+          success: true,
+          taskId: "all-" + Date.now()
         })
         break
 

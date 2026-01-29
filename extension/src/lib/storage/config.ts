@@ -4,7 +4,7 @@
  * 封装 chrome.storage.local 操作，提供类型安全的配置读写
  */
 
-import type { UserConfig, NotifyChannel } from '~types/storage';
+import type { UserConfig, NotifyChannel, BitableTokenType } from '~types/storage';
 import { CONFIG_KEYS } from '~types/storage';
 
 /**
@@ -143,6 +143,67 @@ class ConfigManager {
     await this.set(CONFIG_KEYS.FEISHU_CHAT_ID, chatId);
   }
 
+  // ============================================
+  // 飞书 Bitable 配置方法
+  // ============================================
+
+  /**
+   * 获取飞书 Bitable App Token
+   */
+  async getFeishuBitableAppToken(): Promise<string | undefined> {
+    return this.get(CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN, undefined);
+  }
+
+  /**
+   * 设置飞书 Bitable App Token
+   */
+  async setFeishuBitableAppToken(appToken: string): Promise<void> {
+    await this.set(CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN, appToken);
+  }
+
+  /**
+   * 获取飞书 Bitable Token 类型
+   * @returns 'base' 或 'wiki'，默认 'base'
+   */
+  async getFeishuBitableTokenType(): Promise<BitableTokenType> {
+    return this.get(CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE, 'base');
+  }
+
+  /**
+   * 设置飞书 Bitable Token 类型
+   */
+  async setFeishuBitableTokenType(tokenType: BitableTokenType): Promise<void> {
+    await this.set(CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE, tokenType);
+  }
+
+  /**
+   * 获取飞书 Bitable 站点异常子表 ID
+   */
+  async getFeishuBitableSiteErrorTableId(): Promise<string | undefined> {
+    return this.get(CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID, undefined);
+  }
+
+  /**
+   * 设置飞书 Bitable 站点异常子表 ID
+   */
+  async setFeishuBitableSiteErrorTableId(tableId: string): Promise<void> {
+    await this.set(CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID, tableId);
+  }
+
+  /**
+   * 获取飞书 Bitable 违规商品子表 ID
+   */
+  async getFeishuBitableViolationTableId(): Promise<string | undefined> {
+    return this.get(CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID, undefined);
+  }
+
+  /**
+   * 设置飞书 Bitable 违规商品子表 ID
+   */
+  async setFeishuBitableViolationTableId(tableId: string): Promise<void> {
+    await this.set(CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID, tableId);
+  }
+
   /**
    * 获取推送渠道
    */
@@ -204,6 +265,10 @@ class ConfigManager {
       CONFIG_KEYS.FEISHU_APP_ID,
       CONFIG_KEYS.FEISHU_APP_SECRET,
       CONFIG_KEYS.FEISHU_CHAT_ID,
+      CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN,
+      CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE,
+      CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID,
+      CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID,
       CONFIG_KEYS.NOTIFY_CHANNEL,
       CONFIG_KEYS.PUSH_TIME,
       CONFIG_KEYS.PUSH_ENABLED,
@@ -216,6 +281,10 @@ class ConfigManager {
       feishu_app_id: result[CONFIG_KEYS.FEISHU_APP_ID],
       feishu_app_secret: result[CONFIG_KEYS.FEISHU_APP_SECRET],
       feishu_chat_id: result[CONFIG_KEYS.FEISHU_CHAT_ID],
+      feishu_bitable_app_token: result[CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN],
+      feishu_bitable_token_type: result[CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE] || 'base',
+      feishu_bitable_site_error_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID],
+      feishu_bitable_violation_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID],
       notify_channel: result[CONFIG_KEYS.NOTIFY_CHANNEL] || 'feishu',
       push_time: result[CONFIG_KEYS.PUSH_TIME] || '09:00',
       push_enabled: result[CONFIG_KEYS.PUSH_ENABLED] || false,
@@ -241,6 +310,18 @@ class ConfigManager {
     }
     if (userConfig.feishu_chat_id !== undefined) {
       data[CONFIG_KEYS.FEISHU_CHAT_ID] = userConfig.feishu_chat_id;
+    }
+    if (userConfig.feishu_bitable_app_token !== undefined) {
+      data[CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN] = userConfig.feishu_bitable_app_token;
+    }
+    if (userConfig.feishu_bitable_token_type !== undefined) {
+      data[CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE] = userConfig.feishu_bitable_token_type;
+    }
+    if (userConfig.feishu_bitable_site_error_table_id !== undefined) {
+      data[CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID] = userConfig.feishu_bitable_site_error_table_id;
+    }
+    if (userConfig.feishu_bitable_violation_table_id !== undefined) {
+      data[CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID] = userConfig.feishu_bitable_violation_table_id;
     }
     if (userConfig.notify_channel !== undefined) {
       data[CONFIG_KEYS.NOTIFY_CHANNEL] = userConfig.notify_channel;

@@ -125,6 +125,19 @@ const styles = {
     color: colors.white,
     marginBottom: spacing.xl
   },
+  runAllButton: (disabled: boolean) => ({
+    width: "100%",
+    padding: spacing.xl,
+    fontSize: typography.sizes.xxxl,
+    fontWeight: typography.weights.bold,
+    border: "none",
+    borderRadius: borderRadius.lg,
+    cursor: disabled ? "not-allowed" : "pointer",
+    backgroundColor: disabled ? colors.gray[300] : "#7c3aed",
+    color: disabled ? colors.gray[500] : colors.white,
+    marginBottom: spacing.md,
+    transition: `background-color ${transitions.normal}`
+  }),
   progressContainer: {
     marginBottom: spacing.sm
   },
@@ -402,6 +415,40 @@ export default function RunnerModule(_props: ModuleProps) {
     }
   }
 
+  // 一键执行全部任务（站点异常 + 违规商品 + 定时推送）
+  async function handleRunAllTasks() {
+    try {
+      setError(undefined)
+      setLogs([])
+      setFetchedData([])
+      setStatus("running")
+      setProgress(0)
+      setCompletedMalls(0)
+      setTotalMalls(0)
+
+      const response = await sendToBackground({
+        name: "run-task",
+        body: {
+          taskType: "all",
+          mallIds: undefined,
+          skipPush: false
+        }
+      })
+
+      if (!response?.success) {
+        setError(response?.error || "一键执行启动失败")
+        setStatus("idle")
+        return
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      await updateStatus()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error))
+      setStatus("idle")
+    }
+  }
+
   // 下载 CSV
   async function handleDownloadCsv() {
     try {
@@ -433,6 +480,19 @@ export default function RunnerModule(_props: ModuleProps) {
 
   return (
     <div style={styles.page} data-status={currentStatus}>
+      {/* RPA 状态检测元素（根据状态显示不同 ID，便于 RPA 等待） */}
+      {currentStatus === 'idle' && (
+        <div id="rpa-status-idle" style={{ position: 'absolute', width: 1, height: 1, opacity: 0.01 }} />
+      )}
+      {currentStatus === 'running' && (
+        <div id="rpa-status-running" style={{ position: 'absolute', width: 1, height: 1, opacity: 0.01 }} />
+      )}
+      {currentStatus === 'done' && (
+        <div id="rpa-status-done" style={{ position: 'absolute', width: 1, height: 1, opacity: 0.01 }} />
+      )}
+      {currentStatus === 'fail' && (
+        <div id="rpa-status-fail" style={{ position: 'absolute', width: 1, height: 1, opacity: 0.01 }} />
+      )}
       <div style={styles.container}>
         {/* 页面标题 */}
         <div style={styles.header}>
@@ -475,9 +535,41 @@ export default function RunnerModule(_props: ModuleProps) {
               />
               <span>站点异常导出</span>
             </label>
+            <label style={styles.radioLabel}>
+              <input
+                type="radio"
+                name="taskType"
+                value="violation"
+                checked={taskType === "violation"}
+                onChange={(e) => setTaskType(e.target.value as TaskType)}
+                disabled={currentStatus === "running"}
+                style={styles.radio}
+              />
+              <span>违规商品监控</span>
+            </label>
           </div>
           <div style={styles.hint}>下架监控仅采集数据，推送由定时任务统一处理</div>
         </div>
+
+        {/* 一键执行全部按钮 */}
+        <button
+          id="rpa-run-all-button"
+          data-testid="run-all-tasks"
+          onClick={handleRunAllTasks}
+          disabled={currentStatus === "running"}
+          style={styles.runAllButton(currentStatus === "running")}
+          onMouseOver={(e) => {
+            if (currentStatus !== "running") {
+              e.currentTarget.style.backgroundColor = "#6d28d9"
+            }
+          }}
+          onMouseOut={(e) => {
+            if (currentStatus !== "running") {
+              e.currentTarget.style.backgroundColor = "#7c3aed"
+            }
+          }}>
+          {currentStatus === "running" ? "任务运行中..." : "一键执行全部（站点异常 + 违规监控 + 推送）"}
+        </button>
 
         {/* 运行按钮 */}
         <button
@@ -643,8 +735,12 @@ export default function RunnerModule(_props: ModuleProps) {
           <h3 style={styles.helpTitle}>RPA 自动化提示</h3>
           <ul style={styles.helpList}>
             <li style={styles.helpItem}>
+              • 可通过 <code style={styles.code}>#rpa-run-all-button</code>{" "}
+              一键执行全部任务（站点异常 + 违规监控 + 推送）
+            </li>
+            <li style={styles.helpItem}>
               • 可通过 <code style={styles.code}>#rpa-run-button</code>{" "}
-              定位运行按钮
+              定位运行单个任务按钮
             </li>
             <li style={styles.helpItem}>
               • 可通过 <code style={styles.code}>#rpa-stop-button</code>{" "}

@@ -12,7 +12,7 @@ export type { TaskStatus, TaskState }
 /**
  * 任务类型枚举
  */
-export type TaskType = "unpublished" | "site-error"
+export type TaskType = "unpublished" | "site-error" | "violation" | "all"
 
 /**
  * 运行任务请求

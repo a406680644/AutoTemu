@@ -12,11 +12,12 @@ import type {
   ApiCache,
   SiteErrorItem,
   SkuMapping,
-  UnpublishedItem
+  UnpublishedItem,
+  ViolationItem
 } from "~types/storage"
 
 const DB_NAME = 'autotemu-db';
-const DB_VERSION = 4;  // V4: site_errors 表主键改为 [mallId, skcId]，支持去重更新
+const DB_VERSION = 5;  // V5: 新增 violations 表（违规商品）
 
 /**
  * IndexedDB 数据库管理器
@@ -120,7 +121,22 @@ class DatabaseManager {
     siteErrorsStore.createIndex('checkedAt', 'checkedAt', { unique: false });
     console.log('[IDB] 创建表: site_errors (V4)');
 
-    // 3. SKU 映射表（goodsSkuId -> skcId）
+    // 3. 违规商品表（V5: 新增）
+    if (db.objectStoreNames.contains('violations')) {
+      db.deleteObjectStore('violations');
+      console.log('[IDB] 删除旧表: violations');
+    }
+    const violationsStore = db.createObjectStore('violations', {
+      // 复合主键：[mallId, spuId]（同一店铺同一 SPU 只保留一条）
+      keyPath: ['mallId', 'spuId']
+    });
+    // 索引：按店铺查询
+    violationsStore.createIndex('mallId', 'mallId', { unique: false });
+    // 索引：按检查时间查询
+    violationsStore.createIndex('checkedAt', 'checkedAt', { unique: false });
+    console.log('[IDB] 创建表: violations (V5)');
+
+    // 4. SKU 映射表（goodsSkuId -> skcId）
     if (!db.objectStoreNames.contains("sku_mapping")) {
       const skuMappingStore = db.createObjectStore("sku_mapping", {
         // 复合主键：[mallId, goodsSkuId]
@@ -131,7 +147,7 @@ class DatabaseManager {
       console.log("[IDB] 创建表: sku_mapping")
     }
 
-    // 4. API 缓存表
+    // 5. API 缓存表
     if (!db.objectStoreNames.contains("api_cache")) {
       const cacheStore = db.createObjectStore("api_cache", {
         keyPath: "key"
