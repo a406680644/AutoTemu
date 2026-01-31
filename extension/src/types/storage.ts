@@ -214,6 +214,7 @@ export const CONFIG_KEYS = {
   // 定时推送
   PUSH_TIME: 'push_time',
   PUSH_ENABLED: 'push_enabled',
+  LAST_PUSH_DATE: 'last_push_date',  // 上次推送日期 "YYYY-MM-DD"
 
   // 其他配置
   SYNC_INTERVAL: 'sync_interval',

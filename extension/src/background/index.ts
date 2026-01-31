@@ -79,9 +79,88 @@ async function handleUpdate(previousVersion?: string) {
 // 扩展启动事件
 // ============================================
 
-chrome.runtime.onStartup.addListener(() => {
+chrome.runtime.onStartup.addListener(async () => {
   console.log('[SW] 浏览器启动，扩展激活');
+
+  // 检查是否需要补偿执行定时推送
+  await checkAndRunMissedPush();
 });
+
+/**
+ * 检查并执行错过的定时推送
+ *
+ * 触发条件：
+ * 1. 定时推送已启用
+ * 2. 当前时间已过今天的推送时间点
+ * 3. 今天还没有执行过推送（上次推送日期不是今天）
+ * 4. 存在上次推送记录（非首次使用）
+ */
+async function checkAndRunMissedPush(): Promise<void> {
+  try {
+    // 1. 检查定时推送是否启用
+    const pushEnabled = await config.getPushEnabled();
+    if (!pushEnabled) {
+      console.log('[SW] 定时推送未启用，跳过补偿检查');
+      return;
+    }
+
+    // 2. 获取配置的推送时间
+    const pushTime = await config.getPushTime();
+    const [hours, minutes] = pushTime.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) {
+      console.error('[SW] 推送时间格式错误:', pushTime);
+      return;
+    }
+
+    // 3. 检查当前时间是否已过今天的推送时间
+    const now = new Date();
+    const todayPushTime = new Date();
+    todayPushTime.setHours(hours, minutes, 0, 0);
+
+    if (now < todayPushTime) {
+      console.log('[SW] 今天的推送时间还未到，无需补偿');
+      return;
+    }
+
+    // 4. 检查今天是否已经推送过
+    const lastPushDate = await config.getLastPushDate();
+    const today = now.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+    if (!lastPushDate) {
+      // 首次使用，没有历史推送记录，不执行补偿
+      console.log('[SW] 首次使用，无历史推送记录，跳过补偿');
+      return;
+    }
+
+    if (lastPushDate === today) {
+      console.log('[SW] 今天已推送过，无需补偿');
+      return;
+    }
+
+    // 5. 满足所有条件，执行补偿推送
+    console.log('[SW] 检测到错过的定时推送，开始补偿执行...');
+    console.log(`[SW]   上次推送日期: ${lastPushDate}`);
+    console.log(`[SW]   今天日期: ${today}`);
+    console.log(`[SW]   配置的推送时间: ${pushTime}`);
+
+    await waitUntil(
+      (async () => {
+        const pushResult = await runScheduledPush();
+        if (pushResult.success) {
+          console.log(
+            '[SW] 补偿推送完成',
+            '\n    店铺数:', pushResult.mallCount,
+            '\n    SKC 数:', pushResult.pushedCount
+          );
+        } else {
+          console.error('[SW] 补偿推送失败:', pushResult.errors);
+        }
+      })()
+    );
+  } catch (error) {
+    console.error('[SW] 补偿推送检查失败:', error);
+  }
+}
 
 // ============================================
 // 消息处理

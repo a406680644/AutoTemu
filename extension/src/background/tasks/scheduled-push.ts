@@ -91,6 +91,11 @@ export async function runScheduledPush(): Promise<{
       }
       await db.putBatch('unpublished', unpushedRecords);
       console.log(`[定时推送] 已标记 ${unpushedRecords.length} 条记录为已推送`);
+
+      // 记录今天的推送日期（用于补偿推送判断）
+      const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+      await config.setLastPushDate(today);
+      console.log(`[定时推送] 已记录推送日期: ${today}`);
     }
 
     // 记录推送结果

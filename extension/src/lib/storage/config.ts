@@ -257,6 +257,22 @@ class ConfigManager {
   }
 
   /**
+   * 获取上次推送日期
+   * @returns 日期字符串 "YYYY-MM-DD" 或 undefined（首次使用）
+   */
+  async getLastPushDate(): Promise<string | undefined> {
+    return this.get(CONFIG_KEYS.LAST_PUSH_DATE, undefined);
+  }
+
+  /**
+   * 设置上次推送日期
+   * @param date 日期字符串 "YYYY-MM-DD"
+   */
+  async setLastPushDate(date: string): Promise<void> {
+    await this.set(CONFIG_KEYS.LAST_PUSH_DATE, date);
+  }
+
+  /**
    * 获取用户配置对象
    */
   async getUserConfig(): Promise<UserConfig> {
