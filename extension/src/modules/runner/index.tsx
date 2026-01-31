@@ -568,7 +568,7 @@ export default function RunnerModule(_props: ModuleProps) {
               e.currentTarget.style.backgroundColor = "#7c3aed"
             }
           }}>
-          {currentStatus === "running" ? "任务运行中..." : "一键执行全部（站点异常 + 违规监控 + 推送）"}
+          {currentStatus === "running" ? "任务运行中..." : "一键执行全部（已下架 + 站点异常 + 违规监控）"}
         </button>
 
         {/* 运行按钮 */}

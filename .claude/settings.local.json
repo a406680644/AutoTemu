@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm type-check:*)",
+      "mcp__context7__query-docs",
+      "mcp__lark-mcp__bitable_v1_appTableRecord_create",
+      "mcp__lark-mcp__bitable_v1_appTableField_list",
+      "mcp__lark-mcp__bitable_v1_appTableRecord_update",
+      "mcp__lark-mcp__bitable_v1_appTableRecord_search",
+      "WebSearch",
+      "mcp__lark-mcp__wiki_v2_space_getNode",
+      "mcp__lark-mcp__bitable_v1_appTable_list",
+      "WebFetch(domain:open.feishu.cn)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

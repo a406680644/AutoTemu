@@ -14,6 +14,7 @@ import { feishuBitable } from '~lib/api/feishu-bitable';
 import { taskState } from '~lib/storage/task-state';
 import db from '~lib/storage/idb';
 import type { SiteErrorItem } from '~types/storage';
+import type { Mall } from '~types/api';
 import { sleep } from '~lib/utils/retry';
 // ⭐ 静态导入 CSV 工具（Service Worker 不支持动态 import）
 import { generateCsv, formatTimestamp } from '~lib/utils/csv';
@@ -522,8 +523,9 @@ async function processPageAndQueryErrors(
  * - 第2页完成 → 同时：拉取第3页 + 查询第2页异常（不等第1页查询完成）
  *
  * @param mallIds 可选：指定店铺 ID 列表（空表示所有店铺）
+ * @param preloadedMalls 可选：预先获取的店铺列表（用于一键执行时共享）
  */
-export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
+export async function runSiteErrorSync(mallIds?: string[], preloadedMalls?: Mall[]): Promise<void> {
   try {
     console.log('[站点异常] 开始执行任务（流水线并发模式）');
     await taskState.addLog('info', '开始执行站点异常同步任务');
@@ -531,9 +533,15 @@ export async function runSiteErrorSync(mallIds?: string[]): Promise<void> {
     // 清理停止标志
     await taskState.clearStopFlag();
 
-    // 步骤 1: 获取店铺列表
-    await taskState.addLog("info", "获取店铺列表...")
-    let malls = await temuApi.getMallList()
+    // 步骤 1: 获取店铺列表（如果传入了预加载的店铺列表则复用）
+    let malls: Mall[];
+    if (preloadedMalls && preloadedMalls.length > 0) {
+      await taskState.addLog("info", "使用共享店铺列表...")
+      malls = preloadedMalls;
+    } else {
+      await taskState.addLog("info", "获取店铺列表...")
+      malls = await temuApi.getMallList();
+    }
 
     if (!malls || malls.length === 0) {
       throw new Error("未找到任何店铺，请先登录 Temu 卖家中心")

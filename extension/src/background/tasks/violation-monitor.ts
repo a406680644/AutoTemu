@@ -15,6 +15,7 @@ import { feishuBitable } from '~lib/api/feishu-bitable';
 import { taskState } from '~lib/storage/task-state';
 import db from '~lib/storage/idb';
 import type { ViolationItem } from '~types/storage';
+import type { Mall } from '~types/api';
 import { sleep } from '~lib/utils/retry';
 import { TEMU_API, DELAY } from '~lib/constants';
 
@@ -96,8 +97,9 @@ async function checkAndHandleStop(context: string): Promise<boolean> {
  * 运行违规商品监控任务
  *
  * @param mallIds 可选：指定店铺 ID 列表（空表示所有店铺）
+ * @param preloadedMalls 可选：预先获取的店铺列表（用于一键执行时共享）
  */
-export async function runViolationMonitor(mallIds?: string[]): Promise<void> {
+export async function runViolationMonitor(mallIds?: string[], preloadedMalls?: Mall[]): Promise<void> {
   try {
     console.log('[违规商品] 开始执行任务');
     await taskState.addLog('info', '开始执行违规商品监控任务');
@@ -109,9 +111,15 @@ export async function runViolationMonitor(mallIds?: string[]): Promise<void> {
     const historySnapshot = (await db.getAll('violations')) as ViolationItem[];
     console.log(`[违规商品] 历史快照: ${historySnapshot.length} 条记录`);
 
-    // 步骤 1: 获取店铺列表
-    await taskState.addLog('info', '获取店铺列表...');
-    let malls = await temuApi.getMallList();
+    // 步骤 1: 获取店铺列表（如果传入了预加载的店铺列表则复用）
+    let malls: Mall[];
+    if (preloadedMalls && preloadedMalls.length > 0) {
+      await taskState.addLog('info', '使用共享店铺列表...');
+      malls = preloadedMalls;
+    } else {
+      await taskState.addLog('info', '获取店铺列表...');
+      malls = await temuApi.getMallList();
+    }
 
     if (!malls || malls.length === 0) {
       throw new Error('未找到任何店铺，请先登录 Temu 卖家中心');

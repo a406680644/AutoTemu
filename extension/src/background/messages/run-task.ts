@@ -15,9 +15,9 @@ import type { RunTaskRequest, RunTaskResponse } from "~types/task";
 import { runUnpublishedMonitor } from "../tasks/unpublished-monitor";
 import { runSiteErrorSync } from "../tasks/site-error-sync";
 import { runViolationMonitor } from "../tasks/violation-monitor";
-import { runScheduledPush } from "../tasks/scheduled-push";
 import { taskState } from "~lib/storage/task-state";
 import { ensureBridgeReady, closeCreatedTab } from "~lib/api/bridge-handler";
+import { temuApi } from "~lib/api/temu";
 
 const TEMU_HOST = 'agentseller.temu.com';
 
@@ -114,54 +114,72 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
         break
 
       case 'all':
-        console.log('[run-task] 启动一键执行（站点异常 + 违规商品 + 定时推送）');
+        console.log('[run-task] 启动一键执行（已下架 + 站点异常 + 违规商品）');
 
-        // 并行执行三个任务
+        // 串行执行所有任务（共享店铺列表，避免 taskState 竞争）
         (async () => {
           try {
-            await taskState.addLog('info', '开始并行执行所有任务...');
+            // 1. 先获取店铺列表（仅 1 次）
+            await taskState.addLog('info', '获取店铺列表...');
+            const malls = await temuApi.getMallList();
+            if (!malls || malls.length === 0) {
+              throw new Error('未找到任何店铺，请先登录 Temu 卖家中心');
+            }
+            await taskState.addLog('info', `获取到 ${malls.length} 个店铺，开始串行执行任务...`);
 
-            // 并行执行站点异常和违规商品监控
-            const [siteErrorResult, violationResult] = await Promise.allSettled([
-              runSiteErrorSync(mallIds).then(result => {
-                console.log('[run-task] 站点异常任务完成');
-                return result;
-              }),
-              runViolationMonitor(mallIds).then(result => {
-                console.log('[run-task] 违规商品任务完成');
-                return result;
-              }),
-            ]);
-
-            // 记录任务结果
-            if (siteErrorResult.status === 'rejected') {
-              await taskState.addLog('error', `站点异常任务失败: ${siteErrorResult.reason}`);
-            } else {
-              await taskState.addLog('info', '站点异常任务完成');
+            // 根据 mallIds 过滤店铺列表
+            let filteredMalls = malls;
+            if (mallIds && mallIds.length > 0) {
+              filteredMalls = malls.filter((mall) => mallIds.includes(mall.mallId));
+              if (filteredMalls.length === 0) {
+                throw new Error('指定的店铺 ID 不存在');
+              }
             }
 
-            if (violationResult.status === 'rejected') {
-              await taskState.addLog('error', `违规商品任务失败: ${violationResult.reason}`);
-            } else {
-              await taskState.addLog('info', '违规商品任务完成');
+            let hasErrors = false;
+
+            // 2. 串行执行已下架商品监控（使用共享店铺列表）
+            await taskState.addLog('info', '【1/3】开始执行已下架商品监控...');
+            try {
+              await runUnpublishedMonitor({ mallIds, skipPush: true, malls: filteredMalls });
+              console.log('[run-task] 已下架商品任务完成');
+              await taskState.addLog('info', '【1/3】已下架商品任务完成');
+            } catch (error) {
+              hasErrors = true;
+              console.error('[run-task] 已下架商品任务失败:', error);
+              await taskState.addLog('error', `【1/3】已下架商品任务失败: ${error instanceof Error ? error.message : String(error)}`);
             }
 
-            // 执行定时推送
-            await taskState.addLog('info', '开始执行定时推送...');
-            const pushResult = await runScheduledPush();
-
-            if (pushResult.success) {
-              await taskState.addLog('info', `定时推送完成: ${pushResult.pushedCount} 条 SKC, ${pushResult.mallCount} 个店铺`);
-            } else {
-              await taskState.addLog('warn', `定时推送异常: ${pushResult.errors.join(', ')}`);
+            // 3. 串行执行站点异常同步（使用共享店铺列表）
+            await taskState.addLog('info', '【2/3】开始执行站点异常同步...');
+            try {
+              await runSiteErrorSync(mallIds, filteredMalls);
+              console.log('[run-task] 站点异常任务完成');
+              await taskState.addLog('info', '【2/3】站点异常任务完成');
+            } catch (error) {
+              hasErrors = true;
+              console.error('[run-task] 站点异常任务失败:', error);
+              await taskState.addLog('error', `【2/3】站点异常任务失败: ${error instanceof Error ? error.message : String(error)}`);
             }
 
-            // 更新最终状态
-            const hasErrors = siteErrorResult.status === 'rejected' || violationResult.status === 'rejected';
+            // 4. 串行执行违规商品监控（使用共享店铺列表）
+            await taskState.addLog('info', '【3/3】开始执行违规商品监控...');
+            try {
+              await runViolationMonitor(mallIds, filteredMalls);
+              console.log('[run-task] 违规商品任务完成');
+              await taskState.addLog('info', '【3/3】违规商品任务完成');
+            } catch (error) {
+              hasErrors = true;
+              console.error('[run-task] 违规商品任务失败:', error);
+              await taskState.addLog('error', `【3/3】违规商品任务失败: ${error instanceof Error ? error.message : String(error)}`);
+            }
+
+            // 5. 更新最终状态（不再调用 runScheduledPush，推送由 Chrome Alarm 按配置时间触发）
             if (hasErrors) {
               await taskState.fail('部分任务执行失败，请查看日志');
             } else {
               await taskState.complete();
+              await taskState.addLog('info', '一键执行完成（推送由定时任务负责）');
             }
           } catch (error) {
             console.error('[run-task] 一键执行失败:', error);

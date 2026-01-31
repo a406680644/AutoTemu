@@ -21,6 +21,7 @@ import { taskState } from '~lib/storage/task-state';
 import { formatDateKey } from '~lib/storage/dedup';
 import db from '~lib/storage/idb';
 import type { UnpublishedItem, ReasonGroup } from '~types/storage';
+import type { Mall } from '~types/api';
 import { sleep } from '~lib/utils/retry';
 import { TEMU_API, DELAY } from '~lib/constants';
 
@@ -58,6 +59,8 @@ export interface MonitorOptions {
   mallIds?: string[];
   /** 是否跳过推送（用于 RPA 凌晨采集场景） */
   skipPush?: boolean;
+  /** 预先获取的店铺列表（用于一键执行时共享，避免重复调用 API） */
+  malls?: Mall[];
 }
 
 /**
@@ -70,6 +73,7 @@ export interface MonitorOptions {
 export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<void> {
   const mallIds = options?.mallIds;
   const skipPush = options?.skipPush ?? false;
+  const preloadedMalls = options?.malls;
   try {
     console.log("[下架监控] 开始执行任务")
     await taskState.addLog("info", "开始执行下架监控任务")
@@ -78,9 +82,15 @@ export async function runUnpublishedMonitor(options?: MonitorOptions): Promise<v
     await taskState.clearStopFlag();
     await taskState.clearFetchedData();
 
-    // 步骤 1: 获取店铺列表
-    await taskState.addLog("info", "获取店铺列表...")
-    let malls = await temuApi.getMallList()
+    // 步骤 1: 获取店铺列表（如果传入了预加载的店铺列表则复用）
+    let malls: Mall[];
+    if (preloadedMalls && preloadedMalls.length > 0) {
+      await taskState.addLog("info", "使用共享店铺列表...")
+      malls = preloadedMalls;
+    } else {
+      await taskState.addLog("info", "获取店铺列表...")
+      malls = await temuApi.getMallList();
+    }
 
     if (!malls || malls.length === 0) {
       throw new Error("未找到任何店铺，请先登录 Temu 卖家中心")
