@@ -420,7 +420,8 @@ export default function OptionsPage() {
               {feishuConfigured ? '已配置' : '未配置'}
             </span>
           </h2>
-          <div style={styles.formGroup}>
+          {/* App ID 和 App Secret 已隐藏，使用默认值 */}
+          {/* <div style={styles.formGroup}>
             <label style={styles.label}>
               App ID
               <span style={styles.labelHint}> （飞书开放平台应用凭证）</span>
@@ -445,7 +446,7 @@ export default function OptionsPage() {
               placeholder="••••••••••••••••"
               style={styles.input}
             />
-          </div>
+          </div> */}
           <div style={styles.formGroup}>
             <label style={styles.label}>
               群聊 ID (chat_id)

@@ -294,16 +294,16 @@ class ConfigManager {
 
     return {
       dingtalk_webhook: result[CONFIG_KEYS.DINGTALK_WEBHOOK],
-      feishu_app_id: result[CONFIG_KEYS.FEISHU_APP_ID],
-      feishu_app_secret: result[CONFIG_KEYS.FEISHU_APP_SECRET],
-      feishu_chat_id: result[CONFIG_KEYS.FEISHU_CHAT_ID],
-      feishu_bitable_app_token: result[CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN],
+      feishu_app_id: result[CONFIG_KEYS.FEISHU_APP_ID] || 'cli_a9f6c22772b91cc4',
+      feishu_app_secret: result[CONFIG_KEYS.FEISHU_APP_SECRET] || 'fWuBpEvSAQHogy2WfAEVleBq2z63rwZw',
+      feishu_chat_id: result[CONFIG_KEYS.FEISHU_CHAT_ID] || 'oc_9bd9d4902d91de519d405f661b9be54b',
+      feishu_bitable_app_token: result[CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN] || 'FMbTb9E4faLVpbsRLs4cOlPPnle',
       feishu_bitable_token_type: result[CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE] || 'base',
-      feishu_bitable_site_error_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID],
-      feishu_bitable_violation_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID],
+      feishu_bitable_site_error_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID] || 'tbl05IsU0nvSCvyy',
+      feishu_bitable_violation_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID] || 'tblousheA9yoiWhd',
       notify_channel: result[CONFIG_KEYS.NOTIFY_CHANNEL] || 'feishu',
       push_time: result[CONFIG_KEYS.PUSH_TIME] || '09:00',
-      push_enabled: result[CONFIG_KEYS.PUSH_ENABLED] || false,
+      push_enabled: result[CONFIG_KEYS.PUSH_ENABLED] || true,
       sync_interval: result[CONFIG_KEYS.SYNC_INTERVAL] || 30,
       enabled: result[CONFIG_KEYS.ENABLED] || false
     }
