@@ -324,6 +324,158 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 })
 
 // ============================================
+// 消息路由
+// ============================================
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // 跳过 Plasmo messaging 格式的消息（由 Plasmo 的 handler 处理）
+  // Plasmo 消息格式: { name: "handler-name", body: {...} }
+  if (message.name && typeof message.body !== "undefined") {
+    // 不处理，让 Plasmo messaging handler 处理
+    return false
+  }
+
+  // 只处理有 type 字段的自定义消息
+  if (!message.type) {
+    // 未知格式，不处理，让其他 handler 处理
+    return false
+  }
+
+  console.log(
+    "[SW] 收到消息:",
+    message.type,
+    "from:",
+    sender.tab?.id || "extension"
+  )
+
+  // 使用 async IIFE 处理异步消息
+  ;(async () => {
+    try {
+      switch (message.type) {
+        case "ping":
+          // Ping 测试
+          sendResponse({ ok: true, message: "Service Worker 运行中" })
+          break
+
+        case "BRIDGE_REQUEST":
+          // 跨域请求代理
+          const result = await handleBridgeRequest(message)
+          sendResponse(result)
+          break
+
+        case "UPDATE_ALARMS":
+          // 更新定时任务
+          await createAlarms()
+          sendResponse({ success: true })
+          break
+
+        default:
+          // 未知类型，不响应（可能是其他 handler 处理的消息）
+          // 不调用 sendResponse，让消息通道自然关闭
+          return
+      }
+    } catch (error) {
+      console.error("[SW] 处理消息失败:", error)
+      sendResponse({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  })()
+
+  // 返回 true 保持消息通道开放（异步响应）
+  return true
+})
+
+// ============================================
+// 跨域请求代理（Content Script Bridge）
+// ============================================
+
+/**
+ * 处理跨域请求
+ * 通过 Content Script Bridge 在 Temu 域发送请求
+ */
+async function handleBridgeRequest(message: {
+  targetHost: string
+  requestData: any
+}): Promise<{ success: boolean; data?: any; error?: string }> {
+  const { targetHost, requestData } = message
+
+  try {
+    // 1. 查找目标域的标签页
+    const tabs = await chrome.tabs.query({})
+    const targetTab = tabs.find((tab) => {
+      try {
+        const url = new URL(tab.url || "")
+        return url.hostname.includes(targetHost)
+      } catch {
+        return false
+      }
+    })
+
+    if (!targetTab || !targetTab.id) {
+      return {
+        success: false,
+        error: `未找到 ${targetHost} 的标签页，请先登录 Temu 卖家中心`
+      }
+    }
+
+    // 2. Ping 检测 Content Script 是否就绪（带重试）
+    let pingSuccess = false
+    for (let i = 0; i < 10; i++) {
+      try {
+        const ping = await chrome.tabs.sendMessage(targetTab.id, {
+          type: "ping"
+        })
+        if (ping?.ok) {
+          console.log("[SW] Bridge Ping 成功:", ping.host)
+          pingSuccess = true
+          break
+        }
+      } catch {
+        console.log("[SW] Bridge Ping 失败，重试中...", i + 1)
+        await new Promise((r) => setTimeout(r, 500))
+      }
+    }
+
+    if (!pingSuccess) {
+      // 尝试重新注入 Content Script
+      console.log("[SW] 尝试重新注入 Content Script")
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: targetTab.id },
+          files: ["contents/temu-bridge.js"]
+        })
+        await new Promise((r) => setTimeout(r, 1000))
+      } catch (injectError) {
+        console.error("[SW] 注入 Content Script 失败:", injectError)
+      }
+    }
+
+    // 3. 发送实际请求
+    const response = await chrome.tabs.sendMessage(targetTab.id, requestData)
+
+    if (!response?.ok) {
+      return {
+        success: false,
+        error: response?.error || "请求失败"
+      }
+    }
+
+    return {
+      success: true,
+      data: response
+    }
+  } catch (error) {
+    console.error("[SW] Bridge 请求失败:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+// ============================================
 // 保活机制（waitUntil 模式）
 // ============================================
 

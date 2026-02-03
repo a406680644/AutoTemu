@@ -42,6 +42,8 @@
   "manifest": {
     "host_permissions": [
       "https://agentseller.temu.com/*",
+      "https://*.erp321.com/*",
+      "https://open.yishulink.com/*",
       "https://open.feishu.cn/*",
       "https://oapi.dingtalk.com/*"
     ],
