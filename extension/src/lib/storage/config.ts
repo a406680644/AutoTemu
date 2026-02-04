@@ -7,6 +7,31 @@
 import type { UserConfig, NotifyChannel, BitableTokenType } from '~types/storage';
 import { CONFIG_KEYS } from '~types/storage';
 
+// ============================================
+// 默认配置值（统一管理，修改此处即可全局生效）
+// ============================================
+const DEFAULT_CONFIG = {
+  // 飞书应用凭证
+  FEISHU_APP_ID: '',
+  FEISHU_APP_SECRET: '',
+  FEISHU_CHAT_ID: '',
+
+  // 飞书 Bitable 配置
+  FEISHU_BITABLE_APP_TOKEN: '',
+  FEISHU_BITABLE_TOKEN_TYPE: 'base' as BitableTokenType,
+  FEISHU_BITABLE_SITE_ERROR_TABLE_ID: '',
+  FEISHU_BITABLE_VIOLATION_TABLE_ID: '',
+
+  // 推送配置
+  NOTIFY_CHANNEL: 'feishu' as NotifyChannel,
+  PUSH_TIME: '09:00',
+  PUSH_ENABLED: true,
+
+  // 同步配置
+  SYNC_INTERVAL: 30,
+  ENABLED: false,
+} as const;
+
 /**
  * 配置管理器
  */
@@ -104,8 +129,8 @@ class ConfigManager {
   /**
    * 获取飞书 App ID
    */
-  async getFeishuAppId(): Promise<string | undefined> {
-    return this.get(CONFIG_KEYS.FEISHU_APP_ID, undefined);
+  async getFeishuAppId(): Promise<string> {
+    return this.get(CONFIG_KEYS.FEISHU_APP_ID, DEFAULT_CONFIG.FEISHU_APP_ID);
   }
 
   /**
@@ -118,8 +143,8 @@ class ConfigManager {
   /**
    * 获取飞书 App Secret
    */
-  async getFeishuAppSecret(): Promise<string | undefined> {
-    return this.get(CONFIG_KEYS.FEISHU_APP_SECRET, undefined);
+  async getFeishuAppSecret(): Promise<string> {
+    return this.get(CONFIG_KEYS.FEISHU_APP_SECRET, DEFAULT_CONFIG.FEISHU_APP_SECRET);
   }
 
   /**
@@ -132,8 +157,8 @@ class ConfigManager {
   /**
    * 获取飞书群聊 ID
    */
-  async getFeishuChatId(): Promise<string | undefined> {
-    return this.get(CONFIG_KEYS.FEISHU_CHAT_ID, undefined);
+  async getFeishuChatId(): Promise<string> {
+    return this.get(CONFIG_KEYS.FEISHU_CHAT_ID, DEFAULT_CONFIG.FEISHU_CHAT_ID);
   }
 
   /**
@@ -150,8 +175,8 @@ class ConfigManager {
   /**
    * 获取飞书 Bitable App Token
    */
-  async getFeishuBitableAppToken(): Promise<string | undefined> {
-    return this.get(CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN, undefined);
+  async getFeishuBitableAppToken(): Promise<string> {
+    return this.get(CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN, DEFAULT_CONFIG.FEISHU_BITABLE_APP_TOKEN);
   }
 
   /**
@@ -166,7 +191,7 @@ class ConfigManager {
    * @returns 'base' 或 'wiki'，默认 'base'
    */
   async getFeishuBitableTokenType(): Promise<BitableTokenType> {
-    return this.get(CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE, 'base');
+    return this.get(CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE, DEFAULT_CONFIG.FEISHU_BITABLE_TOKEN_TYPE);
   }
 
   /**
@@ -179,8 +204,8 @@ class ConfigManager {
   /**
    * 获取飞书 Bitable 站点异常子表 ID
    */
-  async getFeishuBitableSiteErrorTableId(): Promise<string | undefined> {
-    return this.get(CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID, undefined);
+  async getFeishuBitableSiteErrorTableId(): Promise<string> {
+    return this.get(CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID, DEFAULT_CONFIG.FEISHU_BITABLE_SITE_ERROR_TABLE_ID);
   }
 
   /**
@@ -193,8 +218,8 @@ class ConfigManager {
   /**
    * 获取飞书 Bitable 违规商品子表 ID
    */
-  async getFeishuBitableViolationTableId(): Promise<string | undefined> {
-    return this.get(CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID, undefined);
+  async getFeishuBitableViolationTableId(): Promise<string> {
+    return this.get(CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID, DEFAULT_CONFIG.FEISHU_BITABLE_VIOLATION_TABLE_ID);
   }
 
   /**
@@ -208,7 +233,7 @@ class ConfigManager {
    * 获取推送渠道
    */
   async getNotifyChannel(): Promise<NotifyChannel> {
-    return this.get(CONFIG_KEYS.NOTIFY_CHANNEL, 'feishu');
+    return this.get(CONFIG_KEYS.NOTIFY_CHANNEL, DEFAULT_CONFIG.NOTIFY_CHANNEL);
   }
 
   /**
@@ -227,7 +252,7 @@ class ConfigManager {
    * @returns 推送时间字符串 "HH:MM"，默认 "09:00"
    */
   async getPushTime(): Promise<string> {
-    return this.get(CONFIG_KEYS.PUSH_TIME, '09:00');
+    return this.get(CONFIG_KEYS.PUSH_TIME, DEFAULT_CONFIG.PUSH_TIME);
   }
 
   /**
@@ -244,7 +269,7 @@ class ConfigManager {
    * 获取定时推送启用状态
    */
   async getPushEnabled(): Promise<boolean> {
-    return this.get(CONFIG_KEYS.PUSH_ENABLED, false);
+    return this.get(CONFIG_KEYS.PUSH_ENABLED, DEFAULT_CONFIG.PUSH_ENABLED);
   }
 
   /**
@@ -294,18 +319,18 @@ class ConfigManager {
 
     return {
       dingtalk_webhook: result[CONFIG_KEYS.DINGTALK_WEBHOOK],
-      feishu_app_id: result[CONFIG_KEYS.FEISHU_APP_ID] || 'cli_a9f6c22772b91cc4',
-      feishu_app_secret: result[CONFIG_KEYS.FEISHU_APP_SECRET] || 'fWuBpEvSAQHogy2WfAEVleBq2z63rwZw',
-      feishu_chat_id: result[CONFIG_KEYS.FEISHU_CHAT_ID] || 'oc_9bd9d4902d91de519d405f661b9be54b',
-      feishu_bitable_app_token: result[CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN] || 'FMbTb9E4faLVpbsRLs4cOlPPnle',
-      feishu_bitable_token_type: result[CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE] || 'base',
-      feishu_bitable_site_error_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID] || 'tbl05IsU0nvSCvyy',
-      feishu_bitable_violation_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID] || 'tblousheA9yoiWhd',
-      notify_channel: result[CONFIG_KEYS.NOTIFY_CHANNEL] || 'feishu',
-      push_time: result[CONFIG_KEYS.PUSH_TIME] || '09:00',
-      push_enabled: result[CONFIG_KEYS.PUSH_ENABLED] || true,
-      sync_interval: result[CONFIG_KEYS.SYNC_INTERVAL] || 30,
-      enabled: result[CONFIG_KEYS.ENABLED] || false
+      feishu_app_id: result[CONFIG_KEYS.FEISHU_APP_ID] || DEFAULT_CONFIG.FEISHU_APP_ID,
+      feishu_app_secret: result[CONFIG_KEYS.FEISHU_APP_SECRET] || DEFAULT_CONFIG.FEISHU_APP_SECRET,
+      feishu_chat_id: result[CONFIG_KEYS.FEISHU_CHAT_ID] || DEFAULT_CONFIG.FEISHU_CHAT_ID,
+      feishu_bitable_app_token: result[CONFIG_KEYS.FEISHU_BITABLE_APP_TOKEN] || DEFAULT_CONFIG.FEISHU_BITABLE_APP_TOKEN,
+      feishu_bitable_token_type: result[CONFIG_KEYS.FEISHU_BITABLE_TOKEN_TYPE] || DEFAULT_CONFIG.FEISHU_BITABLE_TOKEN_TYPE,
+      feishu_bitable_site_error_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_SITE_ERROR_TABLE_ID] || DEFAULT_CONFIG.FEISHU_BITABLE_SITE_ERROR_TABLE_ID,
+      feishu_bitable_violation_table_id: result[CONFIG_KEYS.FEISHU_BITABLE_VIOLATION_TABLE_ID] || DEFAULT_CONFIG.FEISHU_BITABLE_VIOLATION_TABLE_ID,
+      notify_channel: result[CONFIG_KEYS.NOTIFY_CHANNEL] || DEFAULT_CONFIG.NOTIFY_CHANNEL,
+      push_time: result[CONFIG_KEYS.PUSH_TIME] || DEFAULT_CONFIG.PUSH_TIME,
+      push_enabled: result[CONFIG_KEYS.PUSH_ENABLED] ?? DEFAULT_CONFIG.PUSH_ENABLED,
+      sync_interval: result[CONFIG_KEYS.SYNC_INTERVAL] || DEFAULT_CONFIG.SYNC_INTERVAL,
+      enabled: result[CONFIG_KEYS.ENABLED] ?? DEFAULT_CONFIG.ENABLED
     }
   }
 

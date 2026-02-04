@@ -127,7 +127,7 @@ class NotificationManager {
         return false;
       }
 
-      const card = feishuApi.buildAggregatedUnpublishedCard(recordsByMallDate);
+      const card = await feishuApi.buildAggregatedUnpublishedCard(recordsByMallDate);
       await feishuApi.sendCard(chatId, card);
 
       console.log('[Notifier] 飞书推送成功');

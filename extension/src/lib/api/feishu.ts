@@ -221,13 +221,13 @@ class FeishuApiClient {
    *
    * @param recordsByMallDate Map<mallId, Map<date, UnpublishedItem>>
    */
-  buildAggregatedUnpublishedCard(
+  async buildAggregatedUnpublishedCard(
     recordsByMallDate: Map<string, Map<string, {
       mallName: string;
       reasonGroups: Array<{ reason: string; skcIds: string[] }>;
       totalCount: number;
     }>>
-  ): FeishuCardMessage {
+  ): Promise<FeishuCardMessage> {
     const today = new Date().toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
@@ -265,10 +265,9 @@ class FeishuApiClient {
       // 构建该店铺的内容
       const reasonLines: string[] = [];
       for (const [reason, skcIds] of mergedReasonGroups) {
-        // 最多显示 10 个 SKC，超过则省略
-        const displayIds = skcIds.slice(0, 10).join('、');
-        const suffix = skcIds.length > 10 ? `...等${skcIds.length}个` : '';
-        reasonLines.push(`🔴 SKC: ${displayIds}${suffix}\n   原因: ${reason}`);
+        // 显示所有 SKC
+        const displayIds = skcIds.join('、');
+        reasonLines.push(`🔴 SKC: ${displayIds}\n   原因: ${reason}`);
       }
 
       mallContents.push(`**【${mallName}】**\n${reasonLines.join('\n')}`);
@@ -333,11 +332,20 @@ class FeishuApiClient {
               tag: 'button',
               text: {
                 tag: 'plain_text',
+                content: '商品异常表'
+              },
+              url: `https://jcxc1688.feishu.cn/${await config.getFeishuBitableTokenType()}/${await config.getFeishuBitableAppToken()}`,
+              type: 'primary'
+            },
+            {
+              tag: 'button',
+              text: {
+                tag: 'plain_text',
                 content: '查看商品管理'
               },
               url: getTemuPageUrl(TEMU_API.PAGES.PRODUCT_SELECT),
-              type: 'primary'
-            }
+              type: 'default'
+            },
           ]
         },
         {

@@ -11,7 +11,8 @@
       "mcp__lark-mcp__wiki_v2_space_getNode",
       "mcp__lark-mcp__bitable_v1_appTable_list",
       "WebFetch(domain:open.feishu.cn)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(dir:*)"
     ]
   }
 }

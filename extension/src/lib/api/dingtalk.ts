@@ -198,10 +198,9 @@ ${detailLines.join("\n")}
       // 构建该店铺的内容
       const reasonLines: string[] = [];
       for (const [reason, skcIds] of mergedReasonGroups) {
-        // 最多显示 10 个 SKC，超过则省略
-        const displayIds = skcIds.slice(0, 10).join('、');
-        const suffix = skcIds.length > 10 ? `...等${skcIds.length}个` : '';
-        reasonLines.push(`🔴 SKC: ${displayIds}${suffix} - ${reason}`);
+        // 显示所有 SKC
+        const displayIds = skcIds.join('、');
+        reasonLines.push(`🔴 SKC: ${displayIds} - ${reason}`);
       }
 
       mallSections.push(`**【${mallName}】**\n${reasonLines.join('\n')}`);
