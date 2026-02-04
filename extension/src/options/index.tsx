@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { config } from '~lib/storage/config';
 import { notifier } from '~lib/api/notifier';
-import type { NotifyChannel, UserConfig, BitableTokenType } from '~types/storage';
+import type { NotifyChannel, UserConfig, BitableTokenType, UnpublishedPushMode } from '~types/storage';
 
 // 样式常量
 const styles = {
@@ -224,7 +224,9 @@ export default function OptionsPage() {
 
   // 定时推送配置状态
   const [pushTime, setPushTime] = useState('09:00');
-  const [pushEnabled, setPushEnabled] = useState(false);
+
+  // 已下架监控推送模式
+  const [unpublishedPushMode, setUnpublishedPushMode] = useState<UnpublishedPushMode>('immediate');
 
   // 加载配置
   useEffect(() => {
@@ -246,7 +248,7 @@ export default function OptionsPage() {
       setSyncInterval(userConfig.sync_interval || 30);
       setEnabled(userConfig.enabled || false);
       setPushTime(userConfig.push_time || '09:00');
-      setPushEnabled(userConfig.push_enabled || false);
+      setUnpublishedPushMode(userConfig.unpublished_push_mode || 'immediate');
     } catch (error) {
       console.error('加载配置失败:', error);
       setMessage({ type: 'error', text: '加载配置失败' });
@@ -274,7 +276,7 @@ export default function OptionsPage() {
         sync_interval: syncInterval,
         enabled,
         push_time: pushTime,
-        push_enabled: pushEnabled
+        unpublished_push_mode: unpublishedPushMode
       };
 
       await config.setUserConfig(userConfig);
@@ -587,47 +589,48 @@ export default function OptionsPage() {
           </label>
         </div>
 
-        {/* 定时推送设置 */}
+        {/* 已下架监控推送模式 */}
         <div style={styles.card}>
           <h2 style={styles.cardTitle}>
-            定时推送
-            <span style={styles.statusBadge(pushEnabled)}>
-              {pushEnabled ? '已启用' : '未启用'}
+            已下架监控推送模式
+            <span style={styles.statusBadge(unpublishedPushMode === 'scheduled')}>
+              {unpublishedPushMode === 'scheduled' ? '定时推送' : '即时推送'}
             </span>
           </h2>
-          <div style={{ marginBottom: 16, fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-            用于"采集与推送分离"场景：RPA 凌晨采集数据时不推送，等待指定时间统一推送汇总消息。
-          </div>
           <div style={styles.formGroup}>
             <label style={styles.label}>
-              推送时间
-              <span style={styles.labelHint}> （每天在此时间推送汇总消息）</span>
+              推送模式
+              <span style={styles.labelHint}> （单独执行和一键执行都受此配置影响）</span>
             </label>
-            <input
-              type="time"
-              value={pushTime}
-              onChange={(e) => setPushTime(e.target.value)}
-              style={{ ...styles.input, width: 150 }}
-            />
+            <select
+              value={unpublishedPushMode}
+              onChange={(e) => setUnpublishedPushMode(e.target.value as UnpublishedPushMode)}
+              style={styles.select}
+            >
+              <option value="immediate">即时推送（采集后立即推送）</option>
+              <option value="scheduled">定时推送（仅采集，等待定时任务推送）</option>
+            </select>
           </div>
-          <div style={styles.divider} />
-          <label style={styles.checkbox}>
-            <input
-              type="checkbox"
-              checked={pushEnabled}
-              onChange={(e) => setPushEnabled(e.target.checked)}
-              style={styles.checkboxInput}
-            />
-            <div>
-              <div style={{ fontWeight: 500 }}>启用定时推送</div>
-              <div style={{ fontSize: 13, color: '#6b7280' }}>
-                开启后将在指定时间自动推送当日采集的数据
+          {unpublishedPushMode === 'scheduled' && (
+            <>
+              <div style={styles.divider} />
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  推送时间
+                  <span style={styles.labelHint}> （每天在此时间统一推送汇总消息）</span>
+                </label>
+                <input
+                  type="time"
+                  value={pushTime}
+                  onChange={(e) => setPushTime(e.target.value)}
+                  style={{ ...styles.input, width: 150 }}
+                />
               </div>
-            </div>
-          </label>
-          <div style={{ marginTop: 16, padding: 12, backgroundColor: '#fef3c7', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
-            <strong>注意：</strong>定时推送需要浏览器保持运行状态。如果浏览器完全退出，alarm 不会触发。
-          </div>
+              <div style={{ marginTop: 16, padding: 12, backgroundColor: '#fef3c7', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+                <strong>注意：</strong>定时推送需要浏览器保持运行状态。如果浏览器完全退出，alarm 不会触发。
+              </div>
+            </>
+          )}
         </div>
 
         {/* 操作按钮 */}

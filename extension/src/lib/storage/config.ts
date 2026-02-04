@@ -4,7 +4,7 @@
  * 封装 chrome.storage.local 操作，提供类型安全的配置读写
  */
 
-import type { UserConfig, NotifyChannel, BitableTokenType } from '~types/storage';
+import type { UserConfig, NotifyChannel, BitableTokenType, UnpublishedPushMode } from '~types/storage';
 import { CONFIG_KEYS } from '~types/storage';
 
 // ============================================
@@ -26,6 +26,7 @@ const DEFAULT_CONFIG = {
   NOTIFY_CHANNEL: 'feishu' as NotifyChannel,
   PUSH_TIME: '09:00',
   PUSH_ENABLED: true,
+  UNPUBLISHED_PUSH_MODE: 'immediate' as UnpublishedPushMode,
 
   // 同步配置
   SYNC_INTERVAL: 30,
@@ -297,6 +298,35 @@ class ConfigManager {
     await this.set(CONFIG_KEYS.LAST_PUSH_DATE, date);
   }
 
+  // ============================================
+  // 已下架监控推送模式配置方法
+  // ============================================
+
+  /**
+   * 获取已下架监控推送模式
+   * @returns 'immediate'（即时推送）或 'scheduled'（定时推送），默认 'immediate'
+   */
+  async getUnpublishedPushMode(): Promise<UnpublishedPushMode> {
+    return this.get(CONFIG_KEYS.UNPUBLISHED_PUSH_MODE, DEFAULT_CONFIG.UNPUBLISHED_PUSH_MODE);
+  }
+
+  /**
+   * 设置已下架监控推送模式
+   * @param mode 推送模式 'immediate' 或 'scheduled'
+   *
+   * 联动逻辑：
+   * - 'immediate' → 自动禁用定时推送
+   * - 'scheduled' → 自动启用定时推送
+   */
+  async setUnpublishedPushMode(mode: UnpublishedPushMode): Promise<void> {
+    await this.set(CONFIG_KEYS.UNPUBLISHED_PUSH_MODE, mode);
+    // 联动设置定时推送启用状态
+    const pushEnabled = mode === 'scheduled';
+    await this.set(CONFIG_KEYS.PUSH_ENABLED, pushEnabled);
+    // 通知 Service Worker 更新 alarm
+    await chrome.runtime.sendMessage({ type: 'UPDATE_PUSH_ALARM' });
+  }
+
   /**
    * 获取用户配置对象
    */
@@ -313,6 +343,7 @@ class ConfigManager {
       CONFIG_KEYS.NOTIFY_CHANNEL,
       CONFIG_KEYS.PUSH_TIME,
       CONFIG_KEYS.PUSH_ENABLED,
+      CONFIG_KEYS.UNPUBLISHED_PUSH_MODE,
       CONFIG_KEYS.SYNC_INTERVAL,
       CONFIG_KEYS.ENABLED
     ])
@@ -329,6 +360,7 @@ class ConfigManager {
       notify_channel: result[CONFIG_KEYS.NOTIFY_CHANNEL] || DEFAULT_CONFIG.NOTIFY_CHANNEL,
       push_time: result[CONFIG_KEYS.PUSH_TIME] || DEFAULT_CONFIG.PUSH_TIME,
       push_enabled: result[CONFIG_KEYS.PUSH_ENABLED] ?? DEFAULT_CONFIG.PUSH_ENABLED,
+      unpublished_push_mode: result[CONFIG_KEYS.UNPUBLISHED_PUSH_MODE] || DEFAULT_CONFIG.UNPUBLISHED_PUSH_MODE,
       sync_interval: result[CONFIG_KEYS.SYNC_INTERVAL] || DEFAULT_CONFIG.SYNC_INTERVAL,
       enabled: result[CONFIG_KEYS.ENABLED] ?? DEFAULT_CONFIG.ENABLED
     }
@@ -370,8 +402,10 @@ class ConfigManager {
     if (userConfig.push_time !== undefined) {
       data[CONFIG_KEYS.PUSH_TIME] = userConfig.push_time;
     }
-    if (userConfig.push_enabled !== undefined) {
-      data[CONFIG_KEYS.PUSH_ENABLED] = userConfig.push_enabled;
+    if (userConfig.unpublished_push_mode !== undefined) {
+      data[CONFIG_KEYS.UNPUBLISHED_PUSH_MODE] = userConfig.unpublished_push_mode;
+      // 联动设置 push_enabled：scheduled 模式自动启用定时推送
+      data[CONFIG_KEYS.PUSH_ENABLED] = userConfig.unpublished_push_mode === 'scheduled';
     }
     if (userConfig.sync_interval !== undefined) {
       data[CONFIG_KEYS.SYNC_INTERVAL] = userConfig.sync_interval;
@@ -388,7 +422,7 @@ class ConfigManager {
     }
 
     // 如果定时推送配置改变，更新推送 alarm
-    if (userConfig.push_time !== undefined || userConfig.push_enabled !== undefined) {
+    if (userConfig.push_time !== undefined || userConfig.unpublished_push_mode !== undefined) {
       await chrome.runtime.sendMessage({ type: 'UPDATE_PUSH_ALARM' });
     }
   }

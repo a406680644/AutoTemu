@@ -18,6 +18,7 @@ import { runViolationMonitor } from "../tasks/violation-monitor";
 import { taskState } from "~lib/storage/task-state";
 import { ensureBridgeReady, closeCreatedTab } from "~lib/api/bridge-handler";
 import { temuApi } from "~lib/api/temu";
+import { config } from "~lib/storage/config";
 
 const TEMU_HOST = 'agentseller.temu.com';
 
@@ -36,7 +37,12 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
       return
     }
 
-    // 2. 前置检查：确保 Bridge 就绪（会自动创建标签页如果不存在）
+    // 2. 获取已下架监控推送模式配置
+    const pushMode = await config.getUnpublishedPushMode();
+    const effectiveSkipPush = pushMode === 'scheduled';
+    console.log('[run-task] 推送模式:', pushMode, 'skipPush:', effectiveSkipPush);
+
+    // 3. 前置检查：确保 Bridge 就绪（会自动创建标签页如果不存在）
     console.log('[run-task] 检查 Bridge 状态...');
     const bridgeStatus = await ensureBridgeReady(TEMU_HOST);
     if (!bridgeStatus.ready) {
@@ -48,16 +54,16 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
     }
     console.log('[run-task] Bridge 就绪');
 
-    // 3. 重置任务状态
+    // 4. 重置任务状态
     await taskState.reset();
 
-    // 4. 根据任务类型执行不同的任务
+    // 5. 根据任务类型执行不同的任务
     switch (taskType) {
       case 'unpublished':
-        console.log('[run-task] 启动下架监控任务', skipPush ? '(仅采集)' : '(采集+推送)');
+        console.log('[run-task] 启动下架监控任务', effectiveSkipPush ? '(仅采集)' : '(采集+推送)');
 
         // 异步执行任务（不阻塞响应）
-        runUnpublishedMonitor({ mallIds, skipPush })
+        runUnpublishedMonitor({ mallIds, skipPush: effectiveSkipPush })
           .catch(async (error) => {
             console.error('[run-task] 下架监控任务失败:', error);
             await taskState.fail(error instanceof Error ? error.message : String(error));
@@ -139,9 +145,9 @@ const handler: PlasmoMessaging.MessageHandler<RunTaskRequest, RunTaskResponse> =
             let hasErrors = false;
 
             // 2. 串行执行已下架商品监控（使用共享店铺列表）
-            await taskState.addLog('info', '【1/3】开始执行已下架商品监控...');
+            await taskState.addLog('info', `【1/3】开始执行已下架商品监控...${effectiveSkipPush ? '（仅采集）' : '（采集+推送）'}`);
             try {
-              await runUnpublishedMonitor({ mallIds, skipPush: true, malls: filteredMalls });
+              await runUnpublishedMonitor({ mallIds, skipPush: effectiveSkipPush, malls: filteredMalls });
               console.log('[run-task] 已下架商品任务完成');
               await taskState.addLog('info', '【1/3】已下架商品任务完成');
             } catch (error) {

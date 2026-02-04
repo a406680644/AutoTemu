@@ -100,6 +100,13 @@ export interface ApiCache {
 export type NotifyChannel = 'dingtalk' | 'feishu' | 'both' | 'none';
 
 /**
+ * 已下架监控推送模式
+ * - immediate: 采集完立即推送（默认）
+ * - scheduled: 仅采集，等待定时任务推送
+ */
+export type UnpublishedPushMode = 'immediate' | 'scheduled';
+
+/**
  * Bitable Token 类型
  * - base: 直接使用 base 格式的 app_token（如 bascnxxxxxxxx）
  * - wiki: 使用 wiki 节点 token，需要先转换为真实的 app_token
@@ -130,6 +137,9 @@ export interface UserConfig {
   // 定时推送配置
   push_time?: string;         // 定时推送时间，格式 "HH:MM"，如 "09:00"
   push_enabled?: boolean;     // 是否启用定时推送
+
+  // 已下架监控推送模式
+  unpublished_push_mode?: UnpublishedPushMode;  // 推送模式（immediate 或 scheduled）
 
   // 其他配置
   sync_interval?: number;     // 同步间隔（分钟）
@@ -215,6 +225,9 @@ export const CONFIG_KEYS = {
   PUSH_TIME: 'push_time',
   PUSH_ENABLED: 'push_enabled',
   LAST_PUSH_DATE: 'last_push_date',  // 上次推送日期 "YYYY-MM-DD"
+
+  // 已下架监控推送模式
+  UNPUBLISHED_PUSH_MODE: 'unpublished_push_mode',
 
   // 其他配置
   SYNC_INTERVAL: 'sync_interval',
