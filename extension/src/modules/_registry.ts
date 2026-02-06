@@ -4,7 +4,7 @@
  * 此文件由 scripts/generate-registry.js 自动生成
  * 请勿手动修改！
  *
- * 生成时间：2026-02-04T09:51:50.284Z
+ * 生成时间：2026-02-06T02:22:16.160Z
  */
 
 import type { ModuleRegistry } from '~types/module';

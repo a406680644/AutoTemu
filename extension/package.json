@@ -1,7 +1,7 @@
 {
   "name": "extension",
   "displayName": "temu异常监控插件",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A basic Plasmo extension.",
   "author": "Plasmo Corp. <foss@plasmo.com>",
   "pnpm": {
@@ -42,6 +42,7 @@
   "manifest": {
     "host_permissions": [
       "https://agentseller.temu.com/*",
+      "https://seller.kuajingmaihuo.com/*",
       "https://*.erp321.com/*",
       "https://open.yishulink.com/*",
       "https://open.feishu.cn/*",
